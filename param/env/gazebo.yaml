@@ -1,0 +1,33 @@
+# Gazebo の環境設定。ros2 launch localization_bringup localization.launch.py env:=gazebo
+# このファイルは launch が読む（ROS のパラメータファイルではない）。項目の説明は real.yaml
+
+use_sim_time: true
+
+topics:
+  points: /velodyne_points        # gazebo_ros_laser_controller（sim time）
+  odom: /wheelchair/odom          # gazebo_bridge（50 Hz、best effort）
+
+# URDF に base_footprint -> base_link（静的）があるので、map -> base_footprint を配信する
+base_frame_id: base_footprint
+lidar_frame_id: velodyne
+
+# sim time で stamp が揃っているので直さない
+cloud_stamp_correction: none
+
+# base_footprint -> base_link -> velodyne は URDF（robot_state_publisher）が配信する
+static_tfs: []
+
+parameters:
+  pcl_localization:
+    map_path: /root/ros2_ws/map/SC10_4_0.05.pcd
+    # 初期姿勢（LiDAR の姿勢）。Gazebo の出現位置 /wheelchair/pose（base_footprint）
+    # (80.037, 7.072, 12.332), yaw 3.110 rad に取付 base_footprint -> velodyne を合成した値
+    set_initial_pose: true
+    initial_pose_x: 80.207
+    initial_pose_y: 7.067
+    initial_pose_z: 13.470
+    initial_pose_qx: 0.0
+    initial_pose_qy: 0.0
+    initial_pose_qz: 0.999872
+    initial_pose_qw: 0.015974
+  ekf_localizer: {}

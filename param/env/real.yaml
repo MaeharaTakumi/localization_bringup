@@ -1,0 +1,32 @@
+# 実機（WHILL）の環境設定。ros2 launch localization_bringup localization.launch.py env:=real
+#
+# 環境を追加するときは、このファイルをコピーして param/env/<名前>.yaml を作り colcon build する
+# （ビルドせずに試すなら env:=/path/to/<名前>.yaml）。
+# このファイルは launch が読む（ROS のパラメータファイルではない）。
+
+use_sim_time: false
+
+topics:
+  points: /velodyne_points        # 点群（別 PC が配信。時計は同期していない）
+  odom: /wheelchair/odom          # オドメトリ（whill_odometry。この PC の時刻）
+
+base_frame_id: base_link          # EKF の状態・TF（map -> base_frame_id）の基準
+lidar_frame_id: velodyne          # 点群のフレーム
+
+# 点群の stamp の扱い
+#   none     : そのまま使う（時刻同期済み・Gazebo）
+#   estimate : 時計のずれを推定して直す（cloud_stamp_corrector）
+#   receipt  : この PC の受信時刻にする（cloud_stamp_corrector）
+cloud_stamp_correction: estimate
+
+# launch が配信する静的 TF [m], [rad]。URDF（robot_state_publisher）などが配信するものは書かない
+static_tfs:
+  - {parent: base_link, child: velodyne, xyz: [-0.17, 0.0, 1.2], rpy: [0.0, 0.0, -0.017]}
+  - {parent: base_link, child: imu_link, xyz: [0.0, 0.0, 0.0], rpy: [0.0, 0.0, 0.0]}
+
+# ノードごとのパラメータの上書き（共通値は pcl_localization_ros2/param/localization.yaml、
+# ekf_localizer/param/ekf.yaml）。地図は launch 引数 map_path でも指定できる
+parameters:
+  pcl_localization: {}
+  ekf_localizer: {}
+  cloud_stamp_corrector: {}
