@@ -40,4 +40,4 @@ ros2 launch localization_bringup localization.launch.py env:=real map_path:=/pat
 | 環境 | 内容 |
 |---|---|
 | `real` | 実機。点群は別 PC（時計が同期していない）なので `estimate` で直す。取付は launch が静的 TF で配信 |
-| `gazebo` | シミュレーション。sim time。取付は URDF が配信。基準フレームは `base_footprint` |
+| `gazebo` | シミュレーション。sim time。取付は URDF が配信。基準フレームは `base_footprint`。オドメトリの遅れ（`odom_delay` 0.09 s）と EKF の `Q` を設定 |
