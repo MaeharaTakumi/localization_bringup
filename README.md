@@ -31,7 +31,7 @@ ros2 launch localization_bringup localization.launch.py env:=real map_path:=/pat
 | 項目 | 内容 |
 |---|---|
 | `use_sim_time` | Gazebo なら `true` |
-| `topics.points` / `topics.odom` | 点群とオドメトリのトピック |
+| `topics.points` / `topics.odom` | 点群とオドメトリのトピック（`topics.odom` は EKF の `odom_topic` に渡す） |
 | `base_frame_id` / `lidar_frame_id` | EKF の状態・TF の基準フレームと、点群のフレーム |
 | `cloud_stamp_correction` | `none`（stamp をそのまま使う）/ `estimate`（時計のずれを推定して直す）/ `receipt`（受信時刻にする） |
 | `static_tfs` | launch が配信する静的 TF。URDF などが配信するものは書かない |

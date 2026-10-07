@@ -34,7 +34,7 @@ parameters:
     # diff_drive_controller の twist は 10 サンプル（50 Hz で 0.2 s）の移動平均なので、実際の動きより
     # 約 0.09 s 遅れる（真値 /wheelchair/pose との比較で v・omega とも 0.09〜0.10 s）
     odom_delay: 0.09
-    # 遅れの補正と s_omega の推定（ekf.yaml）があるので、yaw はオドメトリで予測できる。
+    # 遅れを補正しているので、yaw はオドメトリで予測できる。
     # Q を小さくして NDT の揺れ（走行中の yaw・z・roll・pitch）を抑える。
     # Gazebo の床は水平で真の z・roll・pitch は一定。x, y は LiDAR の高さ 1.14 m のレバーアームで
     # roll・pitch と結合しているので、小さくしすぎると NDT の位置の揺れが roll・pitch に回る

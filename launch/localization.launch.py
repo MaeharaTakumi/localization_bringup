@@ -139,9 +139,9 @@ def _launch_setup(context):
             parameters=[
                 os.path.join(get_package_share_directory('ekf_localizer'), 'param', 'ekf.yaml'),
                 node_params('ekf_localizer'),
-                {'base_frame_id': base_frame_id, 'lidar_frame_id': lidar_frame_id},
-                sim_time],
-            remappings=[('odom', topics['odom'])]))
+                {'base_frame_id': base_frame_id, 'lidar_frame_id': lidar_frame_id,
+                 'odom_topic': topics['odom']},
+                sim_time]))
 
     # ---- RViz ----
     if use_rviz:
