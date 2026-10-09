@@ -1,5 +1,7 @@
 """NDT（pcl_localization_ros2）と EKF（ekf_localizer）を環境ごとの設定で起動する.
 
+環境ファイルの launch_odometry が true なら whill_odometry も起動する（実機）.
+
   ros2 launch localization_bringup localization.launch.py env:=gazebo
   ros2 launch localization_bringup localization.launch.py env:=real map_path:=/path/to/map.pcd
 
@@ -67,13 +69,30 @@ def _launch_setup(context):
     base_frame_id = _require(env, path, 'base_frame_id')
     lidar_frame_id = _require(env, path, 'lidar_frame_id')
     correction = env.get('cloud_stamp_correction', 'none')
+    launch_odometry = bool(env.get('launch_odometry', False))
     overrides = env.get('parameters') or {}
     sim_time = {'use_sim_time': use_sim_time}
 
     def node_params(name):
         return overrides.get(name) or {}
 
-    actions = [LogInfo(msg=f'[localization_bringup] env: {path} (use_ekf: {use_ekf})')]
+    actions = [LogInfo(
+        msg=f'[localization_bringup] env: {path} '
+            f'(use_ekf: {use_ekf}, launch_odometry: {launch_odometry})')]
+
+    # ---- オドメトリ（Gazebo などオドメトリを別に配信する環境では起動しない）----
+    if launch_odometry:
+        actions.append(Node(
+            package='whill_odometry', executable='whill_odometry_node',
+            name='whill_odometry', output='screen',
+            parameters=[
+                os.path.join(
+                    get_package_share_directory('whill_odometry'), 'config', 'odometry.yaml'),
+                node_params('whill_odometry'),
+                {'input_topic_name': _require(topics, path, 'motor_speed')},
+                sim_time],
+            # 出力はコードで /wheelchair/odom 固定なので、topics.odom に付け替える
+            remappings=[('/wheelchair/odom', topics['odom'])]))
 
     # ---- 静的 TF（URDF などが配信しない分）----
     for tf in env.get('static_tfs') or []:

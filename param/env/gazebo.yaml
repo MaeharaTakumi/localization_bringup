@@ -7,6 +7,9 @@ topics:
   points: /velodyne_points        # gazebo_ros_laser_controller（sim time）
   odom: /wheelchair/odom          # gazebo_bridge（50 Hz、best effort）
 
+# オドメトリは Gazebo（gazebo_bridge）が配信するので whill_odometry は起動しない
+launch_odometry: false
+
 # URDF に base_footprint -> base_link（静的）があるので、map -> base_footprint を配信する
 base_frame_id: base_footprint
 lidar_frame_id: velodyne

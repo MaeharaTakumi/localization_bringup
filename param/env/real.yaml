@@ -8,7 +8,11 @@ use_sim_time: false
 
 topics:
   points: /velodyne_points        # 点群（別 PC が配信。時計は同期していない）
-  odom: /wheelchair/odom          # オドメトリ（whill_odometry。この PC の時刻）
+  odom: /wheelchair/odom          # オドメトリ（whill_odometry が配信。この PC の時刻）
+  motor_speed: /Drp5_whill_red/whill_node/motor_speed_ts   # whill_odometry の入力（WHILL の左右輪の速度）
+
+# whill_odometry を起動するか。起動するときは topics.motor_speed を受け取り、topics.odom に配信する
+launch_odometry: true
 
 base_frame_id: base_link          # EKF の状態・TF（map -> base_frame_id）の基準
 lidar_frame_id: velodyne          # 点群のフレーム

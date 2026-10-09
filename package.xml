@@ -11,6 +11,7 @@
 
   <exec_depend>pcl_localization_ros2</exec_depend>
   <exec_depend>ekf_localizer</exec_depend>
+  <exec_depend>whill_odometry</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
   <exec_depend>rviz2</exec_depend>
   <exec_depend>launch</exec_depend>

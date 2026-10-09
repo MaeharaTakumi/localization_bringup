@@ -52,9 +52,8 @@ flowchart LR
 flowchart LR
   lidar["LiDAR PC<br/>（時計は同期していない）"]
   whill["whill_node"]
-  wodom["/whill_odometry<br/>（別途起動）"]
-
   subgraph LOC["localization（localization_bringup）"]
+    wodom["/whill_odometry"]
     stf["static_transform_publisher<br/>base_link→velodyne<br/>base_link→imu_link"]
     csc["/cloud_stamp_corrector<br/>mode: estimate"]
     ndt["/pcl_localization<br/>NDT"]
@@ -66,7 +65,7 @@ flowchart LR
 
   lidar -->|"/velodyne_points"| csc
   csc -->|"/localization/points"| ndt
-  whill -->|"motor_speed_ts"| wodom
+  whill -->|"/Drp5_whill_red/whill_node/motor_speed_ts"| wodom
   wodom -->|"/wheelchair/odom"| ekf
   stf -->|"/tf_static"| ndt
   stf -->|"/tf_static"| ekf

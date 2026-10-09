@@ -2,6 +2,7 @@
 
 NDT（[lidar_localization](https://github.com/MaeharaTakumi/lidar_localization)、パッケージ名 `pcl_localization_ros2`）と
 EKF（[ekf_localizer](https://github.com/MaeharaTakumi/ekf_localizer)）を、環境ごとの設定で起動します。
+実機では [whill_odometry](https://github.com/MaeharaTakumi/whill_odometry) も起動します。
 
 ```bash
 ros2 launch localization_bringup localization.launch.py env:=gazebo
@@ -32,12 +33,14 @@ ros2 launch localization_bringup localization.launch.py env:=real map_path:=/pat
 |---|---|
 | `use_sim_time` | Gazebo なら `true` |
 | `topics.points` / `topics.odom` | 点群とオドメトリのトピック（`topics.odom` は EKF の `odom_topic` に渡す） |
+| `launch_odometry` | `true` なら whill_odometry を起動する。書かなければ `false` |
+| `topics.motor_speed` | whill_odometry の入力（WHILL の左右輪の速度）。`launch_odometry: true` のとき必須。出力は `topics.odom` |
 | `base_frame_id` / `lidar_frame_id` | EKF の状態・TF の基準フレームと、点群のフレーム |
 | `cloud_stamp_correction` | `none`（stamp をそのまま使う）/ `estimate`（時計のずれを推定して直す）/ `receipt`（受信時刻にする） |
 | `static_tfs` | launch が配信する静的 TF。URDF などが配信するものは書かない |
-| `parameters.<ノード名>` | ノードのパラメータの上書き（地図・初期姿勢など） |
+| `parameters.<ノード名>` | ノードのパラメータの上書き（地図・初期姿勢など）。`whill_odometry` も上書きできる |
 
 | 環境 | 内容 |
 |---|---|
-| `real` | 実機。点群は別 PC（時計が同期していない）なので `estimate` で直す。取付は launch が静的 TF で配信 |
+| `real` | 実機。点群は別 PC（時計が同期していない）なので `estimate` で直す。取付は launch が静的 TF で配信。whill_odometry を起動 |
 | `gazebo` | シミュレーション。sim time。取付は URDF が配信。基準フレームは `base_footprint`。オドメトリの遅れ（`odom_delay` 0.09 s）と EKF の `Q` を設定 |
