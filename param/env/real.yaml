@@ -9,7 +9,7 @@ use_sim_time: false
 topics:
   points: /velodyne_points        # 点群（別 PC が配信。時計は同期していない）
   odom: /wheelchair/odom          # オドメトリ（whill_odometry が配信。この PC の時刻）
-  motor_speed: /Drp5_whill_red/whill_node/motor_speed_ts   # whill_odometry の入力（WHILL の左右輪の速度）
+  motor_speed: /Drp5_whill_blue/whill_node/motor_speed_ts   # whill_odometry の入力（WHILL の左右輪の速度）
 
 # whill_odometry を起動するか。起動するときは topics.motor_speed を受け取り、topics.odom に配信する
 launch_odometry: true
@@ -21,16 +21,31 @@ lidar_frame_id: velodyne          # 点群のフレーム
 #   none     : そのまま使う（時刻同期済み・Gazebo）
 #   estimate : 時計のずれを推定して直す（cloud_stamp_corrector）
 #   receipt  : この PC の受信時刻にする（cloud_stamp_corrector）
-cloud_stamp_correction: estimate
+cloud_stamp_correction: none
 
 # launch が配信する静的 TF [m], [rad]。URDF（robot_state_publisher）などが配信するものは書かない
 static_tfs:
-  - {parent: base_link, child: velodyne, xyz: [-0.17, 0.0, 1.2], rpy: [0.0, 0.0, -0.017]}
+  # - {parent: base_link, child: velodyne, xyz: [-0.17, 0.0, 1.2], rpy: [0.0, 0.0, -0.017]}
+  # - {parent: base_link, child: imu_link, xyz: [0.0, 0.0, 0.0], rpy: [0.0, 0.0, 0.0]}
+  - {parent: base_link, child: velodyne, xyz: [-0.17, 0.0, 1.2], rpy: [0.0, 0.0, 0.017]}
   - {parent: base_link, child: imu_link, xyz: [0.0, 0.0, 0.0], rpy: [0.0, 0.0, 0.0]}
+
 
 # ノードごとのパラメータの上書き（共通値は pcl_localization_ros2/param/localization.yaml、
 # ekf_localizer/param/ekf.yaml）。地図は launch 引数 map_path でも指定できる
 parameters:
-  pcl_localization: {}
-  ekf_localizer: {}
+  pcl_localization: 
+    # map_path: /root/ros2_ws/map/SC10_4_0.05.pcd
+    # # 初期姿勢（LiDAR の姿勢）。Gazebo の出現位置 /wheelchair/pose（base_footprint）
+    # # (80.037, 7.072, 12.332), yaw 3.110 rad に取付 base_footprint -> velodyne を合成した値
+    set_initial_pose: true
+    initial_pose_x: 0.0
+    initial_pose_y: 0.0
+    initial_pose_z: 1.2
+    initial_pose_qx: 0.0
+    initial_pose_qy: 0.0
+    initial_pose_qz: 0.0
+    initial_pose_qw: 1.0
+  # 点群の stamp の時刻で TF・ekf_pose を出すなら {publish_trigger: cloud}（既定は predict_rate の周期）
+  ekf_localizer: {publish_trigger: cloud}
   cloud_stamp_corrector: {}

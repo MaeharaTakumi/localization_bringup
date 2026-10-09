@@ -158,8 +158,9 @@ def _launch_setup(context):
             parameters=[
                 os.path.join(get_package_share_directory('ekf_localizer'), 'param', 'ekf.yaml'),
                 node_params('ekf_localizer'),
+                # points_topic は publish_trigger: cloud のときに購読する（stamp を直した点群）
                 {'base_frame_id': base_frame_id, 'lidar_frame_id': lidar_frame_id,
-                 'odom_topic': topics['odom']},
+                 'odom_topic': topics['odom'], 'points_topic': points},
                 sim_time]))
 
     # ---- RViz ----
