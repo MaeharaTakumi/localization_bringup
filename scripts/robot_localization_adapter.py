@@ -6,8 +6,10 @@ robot_localization は、姿勢の観測を base の姿勢として扱い（セ�
 
   NDT        ndt_pose（map → LiDAR、共分散なし）
              → ndt_pose_base（map → base、共分散は R_ndt を取付で伝播したもの）
-  オドメトリ odom → odom_out（twist の共分散を R_odom に置き換える）
+  オドメトリ odom → odom_out（twist の共分散を R_odom に置き換え、child_frame_id を base にする）
              最初の NDT が届くまでは流さない（robot_localization を NDT の姿勢で初期化するため）
+             ekf_localizer と同じく twist を base の速度として扱う。Gazebo の child_frame_id は
+             wheelchair/base_link で TF に無く、そのままだと robot_localization が黙って捨てる
   初期姿勢   initialpose（map → LiDAR。NDT と同じ扱い）
              → set_pose_map（map → base）と set_pose_odom（同じ値を odom フレームとして）
   出力       odometry（robot_localization の map → base）
@@ -223,6 +225,7 @@ class RobotLocalizationAdapter(Node):
     def on_odom(self, msg):
         if not self.ndt_received:
             return
+        msg.child_frame_id = self.base_frame
         msg.twist.covariance = self.odom_twist_cov.flatten().tolist()
         self.odom_pub.publish(msg)
 
