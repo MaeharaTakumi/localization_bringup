@@ -70,3 +70,8 @@ ros2 launch localization_bringup localization.launch.py env:=gazebo estimator:=r
 - `Q`・`P_init` は `ekf_localizer` の値（robot_localization の `process_noise_covariance` も時間でスケールされる）。
   NDT の遅れは `smooth_lagged_data`（`history_length` 1.0 s）で巻き戻して入れ直す。
 - `ekf_localizer` の `odom_delay`・ゲート・ロックアウトに当たる機能は使っていない。
+- 環境ファイルの `parameters.ekf_filter_node_*` では、15x15 の行列（`process_noise_covariance` など）を
+  `<名前>_diag: [対角 15 個]` で書ける（launch が行列に直す）。
+- `ekf_filter_node_map` は map→odom を出すとき現在時刻の odom→base を TF から引き、引けないと**警告なしに最新の TF で代用する**。
+  odom 側の周期が遅いと、その分だけ回転中に yaw がずれる。Gazebo（`gazebo.yaml`）では odom 側を 200 Hz、
+  `transform_timeout` を 0.05 s、`vyaw` のプロセスノイズを 1.0 にしている（左右 1 周 + 前進の走行で調整）。

@@ -44,3 +44,18 @@ parameters:
     # Gazebo の床は水平で真の z・roll・pitch は一定。x, y は LiDAR の高さ 1.14 m のレバーアームで
     # roll・pitch と結合しているので、小さくしすぎると NDT の位置の揺れが roll・pitch に回る
     # Q: [1.0e-2, 1.0e-2, 1.0e-3, 2.0e-3, 2.0e-3, 1.0e-3, 0.05, 1.0]
+  # ---- robot_localization（estimator:=robot_localization）----
+  # 左右 1 周 + 前進（1 rad/s、1.5 m/s）の録画を再生して調整した値（tools の tune_run.py）。
+  # 15x15 の行列は <名前>_diag に対角 15 個で書く（launch が行列に直す）
+  # [x, y, z, roll, pitch, yaw, vx, vy, vz, vroll, vpitch, vyaw, ax, ay, az]
+  ekf_filter_node_odom:
+    # map 側は map -> odom を出すとき、現在時刻の odom -> base を TF から引く。引けないと robot_localization は
+    # 黙って最新の TF で代用するので、odom 側が古い（50 Hz だと最大 20 ms）分だけ回転中に yaw がずれる。
+    # odom 側を速くして TF が古い時間を短くする
+    frequency: 200.0
+    # vyaw を大きく：回転の切り替え（+1 -> -1 rad/s）に omega が早く追従する
+    process_noise_covariance_diag: [0.05, 0.05, 0.005, 0.05, 0.05, 0.05, 0.05, 0.025, 0.04, 0.01, 0.01, 1.0, 0.01, 0.01, 0.015]
+  ekf_filter_node_map:
+    # odom -> base を最大 0.05 s 待つ（来なければ最新で代用）
+    transform_timeout: 0.05
+    process_noise_covariance_diag: [0.05, 0.05, 0.005, 0.05, 0.05, 0.05, 0.05, 0.025, 0.04, 0.01, 0.01, 1.0, 0.01, 0.01, 0.015]

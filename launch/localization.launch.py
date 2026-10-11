@@ -66,6 +66,19 @@ def _load_env(env):
         return path, (yaml.safe_load(f) or {})
 
 
+def _expand_diag(params):
+    """robot_localization の 15x15 の行列を、対角 15 個（<名前>_diag）で書けるようにする."""
+    out = {}
+    for key, value in params.items():
+        if key.endswith('_diag'):
+            n = len(value)
+            out[key[:-len('_diag')]] = [
+                float(value[i]) if i == j else 0.0 for i in range(n) for j in range(n)]
+        else:
+            out[key] = value
+    return out
+
+
 def _require(env, path, key):
     if key not in env:
         raise RuntimeError(f'"{key}" is missing in {path}')
@@ -208,7 +221,8 @@ def _launch_setup(context):
             actions.append(Node(
                 package='robot_localization', executable='ekf_node', name=name, output='screen',
                 parameters=[
-                    rl_params, node_params(name), {'base_link_frame': base_frame_id}, sim_time],
+                    rl_params, _expand_diag(node_params(name)), {'base_link_frame': base_frame_id},
+                    sim_time],
                 remappings=[('odometry/filtered', odometry), ('set_pose', set_pose)]))
 
     # ---- RViz ----
