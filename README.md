@@ -46,7 +46,7 @@ ros2 launch localization_bringup localization.launch.py env:=gazebo estimator:=r
 | 環境 | 内容 |
 |---|---|
 | `real` | 実機。点群は別 PC（時計が同期していない）なので `estimate` で直す。取付は launch が静的 TF で配信。whill_odometry を起動 |
-| `gazebo` | シミュレーション。sim time。取付は launch が静的 TF で配信（Gazebo の URDF の TF は使わない）。基準フレームは `base_footprint`。オドメトリの遅れ（`odom_delay` 0.09 s）と EKF の `Q` を設定 |
+| `gazebo` | シミュレーション。sim time。取付は URDF が配信。基準フレームは `base_footprint`。オドメトリの遅れ（`odom_delay` 0.09 s）と EKF の `Q` を設定 |
 
 ## robot_localization（`estimator:=robot_localization`）
 

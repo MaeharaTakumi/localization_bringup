@@ -10,21 +10,17 @@ topics:
 # オドメトリは Gazebo（gazebo_bridge）が配信するので whill_odometry は起動しない
 launch_odometry: false
 
-# base_footprint -> base_link（静的）は static_tfs で配信するので、map -> base_footprint を配信する
+# URDF に base_footprint -> base_link（静的）があるので、map -> base_footprint を配信する
 base_frame_id: base_footprint
 lidar_frame_id: velodyne
 
 # sim time で stamp が揃っているので直さない
 cloud_stamp_correction: none
 
-# 取付は Gazebo の TF を使わず、この launch が配信する（estimator によらない）。
-# base_link -> velodyne は実機（以前の real.yaml）と同じ値。
-# 注意：Gazebo の robot_state_publisher も URDF の base_footprint -> base_link -> velodyne_base_link -> velodyne
-# （base_link -> velodyne は (-0.17, 0, 1.0377)、回転 0）を配信し続ける。velodyne の親が 2 つになり、
-# tf2 は後に届いた方を使うので、取付として使われる値は到着順で変わる
-static_tfs:
-  - {parent: base_footprint, child: base_link, xyz: [0.0, 0.0, 0.10], rpy: [0.0, 0.0, 0.0]}
-  - {parent: base_link, child: velodyne, xyz: [-0.17, 0.0, 1.2], rpy: [0.0, 0.0, -0.017]}
+# 取付は Gazebo の URDF（robot_state_publisher）が配信する base_footprint -> base_link -> velodyne_base_link
+# -> velodyne を使う（estimator によらない）。ここで同じ子フレームを配信すると velodyne の親が 2 つになり、
+# 取付として使われる値が到着順で変わる（ノードごとに違う値を読むこともある）ので、何も配信しない
+static_tfs: []
 
 parameters:
   pcl_localization:

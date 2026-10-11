@@ -131,13 +131,12 @@ sequenceDiagram
 |---|---|---|
 | map → base（Gazebo：`base_footprint`、実機：`base_link`） | EKF（50 Hz） | NDT（点群の取得時刻の値を初期値に使う）、RViz |
 | map → odom、odom → base | `estimator:=robot_localization` のとき、上の代わりに `ekf_filter_node_map`・`ekf_filter_node_odom`（50 Hz） | 同上（map → base は 2 つをつないで引く） |
-| `base_footprint` → `base_link`、`base_link` → `velodyne` | launch の `static_transform_publisher`（Gazebo） | NDT・EKF（base → LiDAR の取付として読む） |
-| `base_footprint` → `base_link` → `velodyne_base_link` → `velodyne` | `robot_state_publisher`（URDF、Gazebo） | （Gazebo 側が配信し続ける。上と `velodyne` の親が重なる） |
+| `base_footprint` → `base_link` → `velodyne_base_link` → `velodyne` | `robot_state_publisher`（URDF、Gazebo） | NDT・EKF（base → LiDAR の取付として読む） |
 | `base_link` → `velodyne`、`base_link` → `imu_link` | launch の `static_transform_publisher`（実機） | NDT・EKF（同上） |
 
 `use_ekf:=false` で起動したときは EKF が起動しないので、map → base は NDT が配信し、`/ndt_pose` を購読するノードはなくなります。
 
-Gazebo では `velodyne` の親が、launch の `base_link`（-0.17, 0, 1.2、yaw -0.017）と URDF の `velodyne_base_link`
-（`base_link` から見て -0.17, 0, 1.0377、回転 0）の 2 つになります。tf2 は後に届いた方を使うので、取付として使われる値は到着順で変わります。
+Gazebo で launch からも同じ子フレーム（`velodyne` など）を配信すると親が 2 つになり、取付として使われる値が到着順で変わります
+（ノードごとに違う値を読むこともあります）。そのため `gazebo.yaml` の `static_tfs` は空にしています。
 
 `estimator:=robot_localization` のノード・トピックは [README](../README.md) の「robot_localization」を参照してください。
