@@ -35,6 +35,8 @@ import yaml
 
 # 点群の stamp を直したときの配信先
 CORRECTED_POINTS = '/localization/points'
+# odom_covariance が共分散を付けたオドメトリ（両方の推定器が購読する）
+ODOM_WITH_COV = '/localization/odom'
 
 ESTIMATORS = ('ekf_localizer', 'robot_localization')
 
@@ -181,6 +183,18 @@ def _launch_setup(context):
             transition_id=lifecycle_msgs.msg.Transition.TRANSITION_CONFIGURE)),
     ]
 
+    # ---- オドメトリの共分散（速さに応じた R。両方の推定器で使う）----
+    if use_ekf:
+        actions.append(Node(
+            package='localization_bringup', executable='odom_covariance.py',
+            name='odom_covariance', output='screen',
+            parameters=[
+                os.path.join(
+                    get_package_share_directory('localization_bringup'), 'param',
+                    'odom_covariance.yaml'),
+                node_params('odom_covariance'), sim_time],
+            remappings=[('odom', topics['odom']), ('odom_out', ODOM_WITH_COV)]))
+
     # ---- EKF ----
     if use_ekf and estimator == 'ekf_localizer':
         actions.append(Node(
@@ -189,9 +203,11 @@ def _launch_setup(context):
             parameters=[
                 os.path.join(get_package_share_directory('ekf_localizer'), 'param', 'ekf.yaml'),
                 node_params('ekf_localizer'),
-                # points_topic は publish_trigger: cloud のときに購読する（stamp を直した点群）
+                # points_topic は publish_trigger: cloud のときに購読する（stamp を直した点群）。
+                # オドメトリの R は odom_covariance が付けた共分散を使う
                 {'base_frame_id': base_frame_id, 'lidar_frame_id': lidar_frame_id,
-                 'odom_topic': topics['odom'], 'points_topic': points},
+                 'odom_topic': ODOM_WITH_COV, 'odom_covariance_source': 'message',
+                 'points_topic': points},
                 sim_time]))
 
     # ---- robot_localization（2 段 EKF）----
@@ -211,7 +227,7 @@ def _launch_setup(context):
                 sim_time],
             remappings=[
                 ('ndt_pose', '/ndt_pose'), ('ndt_pose_base', RL_NDT_POSE),
-                ('odom', topics['odom']), ('odom_out', RL_ODOM),
+                ('odom', ODOM_WITH_COV), ('odom_out', RL_ODOM),
                 ('initialpose', '/initialpose'),
                 ('set_pose_odom', RL_SET_POSE_ODOM), ('set_pose_map', RL_SET_POSE_MAP),
                 ('odometry', RL_ODOMETRY_MAP), ('points', points), ('ekf_pose', '/ekf_pose')]))

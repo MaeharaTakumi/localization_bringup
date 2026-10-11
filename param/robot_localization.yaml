@@ -18,7 +18,7 @@
       odom_frame: odom
       base_link_frame: base_link
 
-      # オドメトリ（robot_localization_adapter が twist の共分散を R_odom に置き換えて中継したもの）
+      # オドメトリ（odom_covariance が速さに応じた共分散を付け、robot_localization_adapter が中継したもの）
       # v（vx）・omega（vyaw）と、横・上下の速度 0（vy, vz。車輪の拘束）を使う
       odom0: /robot_localization/odom
       odom0_config: [false, false, false,
@@ -99,9 +99,5 @@ robot_localization_adapter:
       cloud_tf_timeout: 0.2
       # NDT の観測ノイズ（分散、LiDAR）[x, y, z, roll, pitch, yaw]。ekf_localizer の R_ndt と同じ値
       R_ndt: [1.0e-2, 1.0e-2, 1.0e-2, 0.03, 0.03, 1.0e-3]
-      # オドメトリの観測ノイズ（分散）[v, omega]。ekf_localizer の R_odom と同じ値
-      R_odom: [2.5e-3, 5.0e-3]
-      # オドメトリの他の成分（vy, vz, vroll, vpitch）の分散。whill_odometry と同じ値
-      R_odom_other: 1.0e-6
       # initialpose でリセットしたときの共分散（base）[x, y, z, roll, pitch, yaw]。ekf_localizer の P_init
       P_init: [2.0e-1, 2.0e-1, 2.0e-1, 0.01, 0.01, 0.01]

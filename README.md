@@ -55,7 +55,7 @@ ros2 launch localization_bringup localization.launch.py env:=gazebo estimator:=r
 
 ```
 /ndt_pose（LiDAR）─▶ robot_localization_adapter ─▶ /robot_localization/ndt_pose_base（base、共分散 R_ndt）─▶ ekf_filter_node_map ─▶ TF map→odom, /odometry/global
-オドメトリ ───────▶ robot_localization_adapter ─▶ /robot_localization/odom（共分散 R_odom）─┬▶ ekf_filter_node_map
+オドメトリ ─▶ odom_covariance ─▶ /localization/odom（速さに応じた R）─▶ robot_localization_adapter ─▶ /robot_localization/odom ─┬▶ ekf_filter_node_map
                                                                                           └▶ ekf_filter_node_odom ─▶ TF odom→base, /odometry/local
 /initialpose（LiDAR）─▶ robot_localization_adapter ─▶ 2 つの EKF の set_pose（base。odom も同じ値）
 /odometry/global・TF ─▶ robot_localization_adapter ─▶ /ekf_pose（map→LiDAR。ekf_localizer と同じ型・QoS）
@@ -63,7 +63,7 @@ ros2 launch localization_bringup localization.launch.py env:=gazebo estimator:=r
 
 - robot_localization は姿勢の観測を base の姿勢として扱い（センサの取付を補正しない）、メッセージの共分散を使う
   （0 は 1e-9 になる）。そのため `robot_localization_adapter` が NDT の解を取付（静的 TF）で base に直し、
-  NDT・オドメトリに `ekf_localizer` と同じ観測ノイズ（`R_ndt`・`R_odom`）を共分散として付ける。
+  NDT に `ekf_localizer` と同じ観測ノイズ（`R_ndt`）を共分散として付ける。オドメトリの共分散は `odom_covariance`（下記）が付ける。
 - オドメトリは最初の NDT が届くまで流さない（robot_localization を NDT の姿勢で初期化するため）。
 - `/ekf_pose` は `publish_trigger: "cloud"`（既定。点群が届くたびに、その stamp の時刻の TF map→LiDAR から作る）か
   `"timer"`（`/odometry/global` が届くたび。現在時刻まで予測した値）。
@@ -75,3 +75,17 @@ ros2 launch localization_bringup localization.launch.py env:=gazebo estimator:=r
 - `ekf_filter_node_map` は map→odom を出すとき現在時刻の odom→base を TF から引き、引けないと**警告なしに最新の TF で代用する**。
   odom 側の周期が遅いと、その分だけ回転中に yaw がずれる。Gazebo（`gazebo.yaml`）では odom 側を 200 Hz、
   `transform_timeout` を 0.05 s、`vyaw` のプロセスノイズを 1.0 にしている（左右 1 周 + 前進の走行で調整）。
+
+## オドメトリの観測ノイズ（`odom_covariance`、両方の推定器）
+
+`use_ekf:=true` のとき、オドメトリは `odom_covariance` を通して `/localization/odom` に中継され、twist の共分散に
+速さに応じた観測ノイズ R が入る（Nav2 AMCL の `odom_alpha` と同じ考え方）。パラメータは
+[param/odom_covariance.yaml](param/odom_covariance.yaml)（環境ファイルの `parameters.odom_covariance` で上書き）。
+
+```
+R_v     = R_odom[0] + odom_noise_alpha[0]·v² + odom_noise_alpha[1]·ω²
+R_omega = R_odom[1] + odom_noise_alpha[2]·v² + odom_noise_alpha[3]·ω²
+```
+
+- `ekf_localizer` は launch が `odom_covariance_source: message` にして `[0]`・`[35]` を R に使う。robot_localization は共分散をそのまま使う。
+- `odom_noise_alpha` がすべて 0 なら、固定の `R_odom`（`ekf_localizer` の `R_odom` と同じ値）で今までと同じ。

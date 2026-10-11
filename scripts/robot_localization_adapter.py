@@ -6,7 +6,7 @@ robot_localization は、姿勢の観測を base の姿勢として扱い（セ�
 
   NDT        ndt_pose（map → LiDAR、共分散なし）
              → ndt_pose_base（map → base、共分散は R_ndt を取付で伝播したもの）
-  オドメトリ odom → odom_out（twist の共分散を R_odom に置き換え、child_frame_id を base にする）
+  オドメトリ odom → odom_out（child_frame_id を base にする。共分散は odom_covariance が付けたものをそのまま使う）
              最初の NDT が届くまでは流さない（robot_localization を NDT の姿勢で初期化するため）
              ekf_localizer と同じく twist を base の速度として扱う。Gazebo の child_frame_id は
              wheelchair/base_link で TF に無く、そのままだと robot_localization が黙って捨てる
@@ -147,10 +147,6 @@ class RobotLocalizationAdapter(Node):
         self.lidar_frame = self.declare_parameter('lidar_frame_id', 'velodyne').value
         self.r_ndt = np.diag(self.declare_parameter(
             'R_ndt', [1.0e-2, 1.0e-2, 1.0e-2, 0.03, 0.03, 1.0e-3]).value)
-        r_odom = self.declare_parameter('R_odom', [2.5e-3, 5.0e-3]).value
-        r_odom_other = self.declare_parameter('R_odom_other', 1.0e-6).value
-        self.odom_twist_cov = np.diag(
-            [r_odom[0], r_odom_other, r_odom_other, r_odom_other, r_odom_other, r_odom[1]])
         self.p_init = np.diag(self.declare_parameter(
             'P_init', [2.0e-1, 2.0e-1, 2.0e-1, 0.01, 0.01, 0.01]).value)
         self.publish_trigger = self.declare_parameter('publish_trigger', 'cloud').value
@@ -226,7 +222,6 @@ class RobotLocalizationAdapter(Node):
         if not self.ndt_received:
             return
         msg.child_frame_id = self.base_frame
-        msg.twist.covariance = self.odom_twist_cov.flatten().tolist()
         self.odom_pub.publish(msg)
 
     def on_initial_pose(self, msg):

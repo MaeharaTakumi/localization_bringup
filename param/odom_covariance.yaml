@@ -1,0 +1,13 @@
+# odom_covariance（オドメトリに速さに応じた共分散を付けて中継する）のパラメータ。両方の推定器で使う
+# （ekf_localizer は odom_covariance_source: message で読む）。環境ごとの上書きは env の parameters.odom_covariance
+#   R_v     = R_odom[0] + odom_noise_alpha[0]·v² + odom_noise_alpha[1]·ω²
+#   R_omega = R_odom[1] + odom_noise_alpha[2]·v² + odom_noise_alpha[3]·ω²
+# （Nav2 AMCL の odom_alpha と同じ考え方。alpha がすべて 0 なら固定の R_odom）
+/**:
+    ros__parameters:
+      # 止まっているときの分散 [v, omega]。ekf_localizer の R_odom と同じ値
+      R_odom: [2.5e-3, 5.0e-3]
+      # [v²→R_v, ω²→R_v, v²→R_omega, ω²→R_omega]
+      odom_noise_alpha: [0.0, 0.0, 0.0, 0.0]
+      # 他の成分（vy, vz, vroll, vpitch）の分散。whill_odometry と同じ値
+      R_odom_other: 1.0e-6
