@@ -5,6 +5,10 @@
   ros2 launch localization_bringup localization.launch.py env:=gazebo
   ros2 launch localization_bringup localization.launch.py env:=real map_path:=/path/to/map.pcd
 
+EKF は estimator で選ぶ。ekf_localizer（既定）か robot_localization（2 段 EKF、param/robot_localization.yaml）.
+
+  ros2 launch localization_bringup localization.launch.py env:=gazebo estimator:=robot_localization
+
 環境は param/env/<名前>.yaml に 1 ファイルで書く（env:=<名前>）。追加するにはファイルを置いて
 colcon build する。ビルドせずに試すなら env:=/path/to/file.yaml でも読める。
 
@@ -31,6 +35,16 @@ import yaml
 
 # 点群の stamp を直したときの配信先
 CORRECTED_POINTS = '/localization/points'
+
+ESTIMATORS = ('ekf_localizer', 'robot_localization')
+
+# robot_localization と robot_localization_adapter の間のトピック（param/robot_localization.yaml と合わせる）
+RL_NDT_POSE = '/robot_localization/ndt_pose_base'
+RL_ODOM = '/robot_localization/odom'
+RL_SET_POSE_ODOM = '/ekf_filter_node_odom/set_pose'
+RL_SET_POSE_MAP = '/ekf_filter_node_map/set_pose'
+RL_ODOMETRY_ODOM = '/odometry/local'
+RL_ODOMETRY_MAP = '/odometry/global'
 
 
 def _env_dir():
@@ -61,6 +75,10 @@ def _require(env, path, key):
 def _launch_setup(context):
     path, env = _load_env(LaunchConfiguration('env').perform(context))
     use_ekf = LaunchConfiguration('use_ekf').perform(context).lower() == 'true'
+    estimator = LaunchConfiguration('estimator').perform(context)
+    if estimator not in ESTIMATORS:
+        raise RuntimeError(
+            f'estimator "{estimator}" is not supported. Available: {", ".join(ESTIMATORS)}')
     use_rviz = LaunchConfiguration('rviz').perform(context).lower() == 'true'
     map_path = LaunchConfiguration('map_path').perform(context)
 
@@ -78,7 +96,7 @@ def _launch_setup(context):
 
     actions = [LogInfo(
         msg=f'[localization_bringup] env: {path} '
-            f'(use_ekf: {use_ekf}, launch_odometry: {launch_odometry})')]
+            f'(use_ekf: {use_ekf}, estimator: {estimator}, launch_odometry: {launch_odometry})')]
 
     # ---- オドメトリ（Gazebo などオドメトリを別に配信する環境では起動しない）----
     if launch_odometry:
@@ -151,7 +169,7 @@ def _launch_setup(context):
     ]
 
     # ---- EKF ----
-    if use_ekf:
+    if use_ekf and estimator == 'ekf_localizer':
         actions.append(Node(
             package='ekf_localizer', executable='ekf_localizer_node',
             name='ekf_localizer', output='screen',
@@ -162,6 +180,36 @@ def _launch_setup(context):
                 {'base_frame_id': base_frame_id, 'lidar_frame_id': lidar_frame_id,
                  'odom_topic': topics['odom'], 'points_topic': points},
                 sim_time]))
+
+    # ---- robot_localization（2 段 EKF）----
+    #   adapter        NDT（LiDAR）を base に直し、オドメトリ・NDT に共分散を付けて渡す。
+    #                  /initialpose を 2 つの EKF の set_pose に、map -> base を /ekf_pose（LiDAR）に直す
+    #   ekf_filter_node_odom  オドメトリだけ。odom -> base の TF
+    #   ekf_filter_node_map   NDT + オドメトリ。map -> odom の TF
+    if use_ekf and estimator == 'robot_localization':
+        rl_params = os.path.join(
+            get_package_share_directory('localization_bringup'), 'param', 'robot_localization.yaml')
+        actions.append(Node(
+            package='localization_bringup', executable='robot_localization_adapter.py',
+            name='robot_localization_adapter', output='screen',
+            parameters=[
+                rl_params, node_params('robot_localization_adapter'),
+                {'base_frame_id': base_frame_id, 'lidar_frame_id': lidar_frame_id},
+                sim_time],
+            remappings=[
+                ('ndt_pose', '/ndt_pose'), ('ndt_pose_base', RL_NDT_POSE),
+                ('odom', topics['odom']), ('odom_out', RL_ODOM),
+                ('initialpose', '/initialpose'),
+                ('set_pose_odom', RL_SET_POSE_ODOM), ('set_pose_map', RL_SET_POSE_MAP),
+                ('odometry', RL_ODOMETRY_MAP), ('points', points), ('ekf_pose', '/ekf_pose')]))
+        for name, odometry, set_pose in (
+                ('ekf_filter_node_odom', RL_ODOMETRY_ODOM, RL_SET_POSE_ODOM),
+                ('ekf_filter_node_map', RL_ODOMETRY_MAP, RL_SET_POSE_MAP)):
+            actions.append(Node(
+                package='robot_localization', executable='ekf_node', name=name, output='screen',
+                parameters=[
+                    rl_params, node_params(name), {'base_link_frame': base_frame_id}, sim_time],
+                remappings=[('odometry/filtered', odometry), ('set_pose', set_pose)]))
 
     # ---- RViz ----
     if use_rviz:
@@ -184,7 +232,10 @@ def generate_launch_description():
             description='Environment name (param/env/<env>.yaml) or path to an env yaml file'),
         DeclareLaunchArgument(
             'use_ekf', default_value='true',
-            description='Run ekf_localizer. If false, NDT publishes the TF itself'),
+            description='Run an EKF (estimator). If false, NDT publishes the TF itself'),
+        DeclareLaunchArgument(
+            'estimator', default_value='ekf_localizer', choices=list(ESTIMATORS),
+            description='EKF to run when use_ekf is true'),
         DeclareLaunchArgument(
             'map_path', default_value='',
             description='PCD map path (overrides map_path in the parameter files)'),
