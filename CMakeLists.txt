@@ -8,6 +8,7 @@ install(DIRECTORY launch param
 )
 
 install(PROGRAMS scripts/robot_localization_adapter.py scripts/odom_covariance.py
+  scripts/joint_state_odometry.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

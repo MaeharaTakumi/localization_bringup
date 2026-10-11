@@ -5,7 +5,18 @@ use_sim_time: true
 
 topics:
   points: /velodyne_points        # gazebo_ros_laser_controller（sim time）
-  odom: /wheelchair/odom          # gazebo_bridge（50 Hz、best effort）
+  # gazebo_bridge が中継する diff_drive_controller のオドメトリ。Gazebo の controller.yaml を
+  # velocity_rolling_window_size: 1 にしたので（2026-10-12）、速度は移動平均なし（直近 0.02 s の車輪の回転角の差）
+  odom: /wheelchair/odom
+
+# 車輪の角速度（/wheelchair/joint_states）から計算したオドメトリを使うときは、次を書くと launch が joint_state_odometry を
+# 起動して topics.odom に出す（topics.odom を /localization/wheel_odom などにする）。実運用では使わない
+# joint_state_odometry:
+#   topic: /wheelchair/joint_states
+#   left_wheel_joint: left_wheel_joint
+#   right_wheel_joint: right_wheel_joint
+#   wheel_radius: 0.1325
+#   wheel_separation: 0.492
 
 # オドメトリは Gazebo（gazebo_bridge）が配信するので whill_odometry は起動しない
 launch_odometry: false
@@ -37,10 +48,10 @@ parameters:
     initial_pose_qw: 0.015974
   # ---- オドメトリ（両方の推定器）----
   odom_covariance:
-    # diff_drive_controller の twist は 10 サンプル（50 Hz で 0.2 s）の移動平均なので、実際の動きより
-    # 約 0.09 s 遅れる（真値 /wheelchair/pose との比較で v・omega とも 0.09〜0.10 s）。stamp を戻して補正する。
-    # 左右 1 周 + 前進の録画の再生で、速度が急に変わる瞬間の yaw 誤差が両方の推定器で下がった
-    odom_delay: 0.09
+    # オドメトリに移動平均がかかっていないので、遅れの補正はしない。
+    # （0.2 s の移動平均のときは 0.09 s 戻していた：速度の変化が斜めになり、ずらすと動き出しが真値より早すぎ、
+    #   v（車輪が滑って車体より先に変わる）では前進開始・停止が悪くなった）
+    odom_delay: 0.0
     # 回転中、オドメトリの omega は真値の 1.08〜1.09 倍（実効的な車輪間隔が 0.532〜0.535 m で、設定の 0.492 m より広い）。
     # 真値 / オドメトリ（左 0.9205、右 0.9243）の平均を掛けて補正する。diff_drive_controller の
     # wheel_separation_multiplier: 1.085 で同じことを確かめた（Gazebo 側は変えない）。v は真値と一致

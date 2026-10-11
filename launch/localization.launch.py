@@ -1,6 +1,7 @@
 """NDT（pcl_localization_ros2）と EKF（ekf_localizer）を環境ごとの設定で起動する.
 
 環境ファイルの launch_odometry が true なら whill_odometry も起動する（実機）.
+環境ファイルに joint_state_odometry があれば、車輪の角速度（JointState）からオドメトリを計算するノードを起動する（任意）.
 
   ros2 launch localization_bringup localization.launch.py env:=gazebo
   ros2 launch localization_bringup localization.launch.py env:=real map_path:=/path/to/map.pcd
@@ -126,6 +127,17 @@ def _launch_setup(context):
                 sim_time],
             # 出力はコードで /wheelchair/odom 固定なので、topics.odom に付け替える
             remappings=[('/wheelchair/odom', topics['odom'])]))
+
+    # ---- 車輪の角速度からのオドメトリ（joint_state_odometry があるとき。出力は topics.odom）----
+    jso = env.get('joint_state_odometry')
+    if jso:
+        jso = dict(jso)
+        joint_states = jso.pop('topic', '/joint_states')
+        actions.append(Node(
+            package='localization_bringup', executable='joint_state_odometry.py',
+            name='joint_state_odometry', output='screen',
+            parameters=[jso, {'base_frame_id': base_frame_id}, sim_time],
+            remappings=[('joint_states', joint_states), ('odom', topics['odom'])]))
 
     # ---- 静的 TF（URDF などが配信しない分）----
     for tf in env.get('static_tfs') or []:

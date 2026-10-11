@@ -46,7 +46,7 @@ ros2 launch localization_bringup localization.launch.py env:=gazebo estimator:=r
 | 環境 | 内容 |
 |---|---|
 | `real` | 実機。点群は別 PC（時計が同期していない）なので `estimate` で直す。取付は launch が静的 TF で配信。whill_odometry を起動 |
-| `gazebo` | シミュレーション。sim time。取付は URDF が配信。基準フレームは `base_footprint`。オドメトリの遅れ（`odom_delay` 0.09 s）と EKF の `Q` を設定 |
+| `gazebo` | シミュレーション。sim time。取付は URDF が配信。基準フレームは `base_footprint`。オドメトリは `/wheelchair/odom`（Gazebo の diff_drive_controller の速度の移動平均を 1 にしたもの）。omega の倍率（`odom_scale`）と R・Q を設定 |
 
 ## robot_localization（`estimator:=robot_localization`）
 
@@ -94,6 +94,14 @@ R_omega = R_odom[1] + odom_noise_alpha[2]·v² + odom_noise_alpha[3]·ω²
   robot_localization では、`ekf_filter_node_odom` も `smooth_lagged_data: true` にしないと、戻した stamp が正しい時刻に入らない。
 - `odom_scale` [v, omega] をオドメトリの v・omega に掛ける（実効的な車輪間隔・半径が設定と違う分の補正。既定 [1, 1]）。
   Gazebo は omega 0.922（回転中、オドメトリの omega が真値の 1.08〜1.09 倍。実効的な車輪間隔 0.532〜0.535 m）。
-- Gazebo（`gazebo.yaml`）は `odom_delay: 0.09`（diff_drive_controller の移動平均の遅れ）。左右 1 周 + 前進の再生では、
-  速さ・加速度に応じた R は効かず（加速度に応じた R は、速度が変わる間オドメトリを信じなくなり悪化）、
-  遅れの補正と Q（ekf_localizer は omega 10、robot_localization は vx 5）の組み合わせで、速度が急に変わる瞬間の yaw 誤差が下がった。
+- Gazebo（`gazebo.yaml`）は `odom_delay: 0`。Gazebo の diff_drive_controller の速度の移動平均を 10（0.2 s）から 1（0.02 s）に
+  した（Gazebo 側の `controller.yaml` の `velocity_rolling_window_size`、2026-10-12）ので、遅れの補正は要らない
+  （0.2 s の移動平均のときは 0.09 s 戻していたが、動き出しが真値より早すぎた）。速さ・加速度に応じた R は効かなかった
+  （加速度に応じた R は、速度が変わる間オドメトリを信じなくなり悪化）。
+
+### 車輪の角速度からのオドメトリ（`joint_state_odometry`、任意）
+
+環境ファイルに `joint_state_odometry:`（`topic`・`left_wheel_joint`・`right_wheel_joint`・`wheel_radius`・`wheel_separation`）を書くと、
+launch が `scripts/joint_state_odometry.py` を起動し、`sensor_msgs/JointState` の車輪の角速度から v = r(wR+wL)/2、
+omega = r(wR-wL)/b を計算して `topics.odom` に出す（`topics.odom` は `/localization/wheel_odom` などにする）。
+Gazebo で移動平均のかかったオドメトリの代わりに試したもの。実運用（`gazebo.yaml`・`real.yaml`）では使わない。
