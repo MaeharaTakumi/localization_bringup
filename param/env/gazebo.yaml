@@ -41,6 +41,10 @@ parameters:
     # 約 0.09 s 遅れる（真値 /wheelchair/pose との比較で v・omega とも 0.09〜0.10 s）。stamp を戻して補正する。
     # 左右 1 周 + 前進の録画の再生で、速度が急に変わる瞬間の yaw 誤差が両方の推定器で下がった
     odom_delay: 0.09
+    # 回転中、オドメトリの omega は真値の 1.08〜1.09 倍（実効的な車輪間隔が 0.532〜0.535 m で、設定の 0.492 m より広い）。
+    # 真値 / オドメトリ（左 0.9205、右 0.9243）の平均を掛けて補正する。diff_drive_controller の
+    # wheel_separation_multiplier: 1.085 で同じことを確かめた（Gazebo 側は変えない）。v は真値と一致
+    odom_scale: [1.0, 0.922]
   ekf_localizer:
     # オドメトリの遅れは odom_covariance で補正するので、ここでは 0（二重にしない）
     odom_delay: 0.00

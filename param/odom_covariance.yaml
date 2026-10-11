@@ -15,3 +15,5 @@
       accel_noise_tau: [0.0, 0.0]
       # オドメトリの遅れ [s]。stamp をこれだけ戻して中継する（ekf_localizer の odom_delay は 0 のままにする）
       odom_delay: 0.0
+      # オドメトリの倍率の補正 [v, omega]。v・omega に掛ける（実効的な車輪間隔・半径が設定と違う分）
+      odom_scale: [1.0, 1.0]
