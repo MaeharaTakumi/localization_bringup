@@ -89,3 +89,9 @@ R_omega = R_odom[1] + odom_noise_alpha[2]·v² + odom_noise_alpha[3]·ω²
 
 - `ekf_localizer` は launch が `odom_covariance_source: message` にして `[0]`・`[35]` を R に使う。robot_localization は共分散をそのまま使う。
 - `odom_noise_alpha` がすべて 0 なら、固定の `R_odom`（`ekf_localizer` の `R_odom` と同じ値）で今までと同じ。
+- `accel_noise_tau` [τ_v, τ_ω] で、加速度に応じた分 (τ·dv/dt)²・(τ·dω/dt)² も R に足せる（既定 0）。
+- `odom_delay` [s] だけ stamp を戻して、オドメトリの遅れを補正する（既定 0。`ekf_localizer` 自身の `odom_delay` は 0 のままにする）。
+  robot_localization では、`ekf_filter_node_odom` も `smooth_lagged_data: true` にしないと、戻した stamp が正しい時刻に入らない。
+- Gazebo（`gazebo.yaml`）は `odom_delay: 0.09`（diff_drive_controller の移動平均の遅れ）。左右 1 周 + 前進の再生では、
+  速さ・加速度に応じた R は効かず（加速度に応じた R は、速度が変わる間オドメトリを信じなくなり悪化）、
+  遅れの補正と Q（ekf_localizer は omega 10、robot_localization は vx 5）の組み合わせで、速度が急に変わる瞬間の yaw 誤差が下がった。

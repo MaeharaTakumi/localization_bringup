@@ -1,7 +1,7 @@
-# odom_covariance（オドメトリに速さに応じた共分散を付けて中継する）のパラメータ。両方の推定器で使う
+# odom_covariance（オドメトリに時変の共分散を付け、遅れを補正して中継する）のパラメータ。両方の推定器で使う
 # （ekf_localizer は odom_covariance_source: message で読む）。環境ごとの上書きは env の parameters.odom_covariance
-#   R_v     = R_odom[0] + odom_noise_alpha[0]·v² + odom_noise_alpha[1]·ω²
-#   R_omega = R_odom[1] + odom_noise_alpha[2]·v² + odom_noise_alpha[3]·ω²
+#   R_v     = R_odom[0] + odom_noise_alpha[0]·v² + odom_noise_alpha[1]·ω² + (accel_noise_tau[0]·dv/dt)²
+#   R_omega = R_odom[1] + odom_noise_alpha[2]·v² + odom_noise_alpha[3]·ω² + (accel_noise_tau[1]·dω/dt)²
 # （Nav2 AMCL の odom_alpha と同じ考え方。alpha がすべて 0 なら固定の R_odom）
 /**:
     ros__parameters:
@@ -11,3 +11,7 @@
       odom_noise_alpha: [0.0, 0.0, 0.0, 0.0]
       # 他の成分（vy, vz, vroll, vpitch）の分散。whill_odometry と同じ値
       R_odom_other: 1.0e-6
+      # 加速度に応じた分 [τ_v, τ_omega] [s]：R に (τ·加速度)² を足す（オドメトリの遅れ τ による誤差）
+      accel_noise_tau: [0.0, 0.0]
+      # オドメトリの遅れ [s]。stamp をこれだけ戻して中継する（ekf_localizer の odom_delay は 0 のままにする）
+      odom_delay: 0.0

@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
-"""オドメトリの twist に、速さに応じた共分散（観測ノイズ R）を付けて中継するノード.
+"""オドメトリの twist に、時変の共分散（観測ノイズ R）を付け、遅れを補正して中継するノード.
 
-  odom → odom_out（twist.covariance だけ置き換える。他はそのまま）
+  odom → odom_out（twist.covariance を置き換え、header.stamp を odom_delay だけ戻す。他はそのまま）
 
-R は Nav2 AMCL のオドメトリの動きのモデル（odom_alpha）と同じく、ばらつきが動きに比例するとして分散で
-  R_v     = R_odom[0] + alpha[0]·v² + alpha[1]·ω²
-  R_omega = R_odom[1] + alpha[2]·v² + alpha[3]·ω²
-  （v = twist.linear.x、ω = twist.angular.z）。それ以外の成分（vy, vz, vroll, vpitch）は R_odom_other。
-alpha がすべて 0 なら固定の R_odom（ekf_localizer の odom_covariance_source: param と同じ）。
+R は分散で
+  R_v     = R_odom[0] + alpha[0]·v² + alpha[1]·ω² + (accel_noise_tau[0]·a)²
+  R_omega = R_odom[1] + alpha[2]·v² + alpha[3]·ω² + (accel_noise_tau[1]·α)²
+  （v = twist.linear.x、ω = twist.angular.z、a = dv/dt、α = dω/dt は直前のメッセージとの差）。
+  alpha の項は速さに応じた分（Nav2 AMCL の odom_alpha と同じ考え方）、accel_noise_tau の項は加速度に応じた分
+  （遅れ τ のあるオドメトリの誤差は約 τ·加速度）。それ以外の成分（vy, vz, vroll, vpitch）は R_odom_other。
+alpha・accel_noise_tau・odom_delay がすべて 0 なら、固定の R_odom で stamp もそのまま（今までと同じ）。
 ekf_localizer は odom_covariance_source: message で [0]・[35] を、robot_localization はそのまま使う。
+odom_delay はここで補正するので、ekf_localizer 自身の odom_delay は 0 のままにする（二重にしない）。
 """
 
 from nav_msgs.msg import Odometry
@@ -31,23 +34,39 @@ class OdomCovariance(Node):
         self.alpha = [float(v) for v in self.declare_parameter(
             'odom_noise_alpha', [0.0, 0.0, 0.0, 0.0], any_type).value]
         self.r_other = float(self.declare_parameter('R_odom_other', 1.0e-6, any_type).value)
-        if len(self.r0) != 2 or len(self.alpha) != 4:
-            raise ValueError('R_odom needs 2 values and odom_noise_alpha needs 4 values')
+        self.tau = [float(v) for v in self.declare_parameter(
+            'accel_noise_tau', [0.0, 0.0], any_type).value]
+        self.delay = float(self.declare_parameter('odom_delay', 0.0, any_type).value)
+        if len(self.r0) != 2 or len(self.alpha) != 4 or len(self.tau) != 2:
+            raise ValueError(
+                'R_odom needs 2 values, odom_noise_alpha 4 values and accel_noise_tau 2 values')
+        self.prev = None   # 直前の (stamp [s], v, ω)
+        self.accel = (0.0, 0.0)
         self.pub = self.create_publisher(
             Odometry, 'odom_out', QoSProfile(depth=10, reliability=ReliabilityPolicy.RELIABLE))
         self.create_subscription(Odometry, 'odom', self.on_odom, qos_profile_sensor_data)
-        self.get_logger().info(f'R_odom: {self.r0}, odom_noise_alpha: {self.alpha}')
+        self.get_logger().info(
+            f'R_odom: {self.r0}, odom_noise_alpha: {self.alpha}, '
+            f'accel_noise_tau: {self.tau}, odom_delay: {self.delay}')
 
     def on_odom(self, msg):
-        v2 = msg.twist.twist.linear.x ** 2
-        w2 = msg.twist.twist.angular.z ** 2
+        v, w = msg.twist.twist.linear.x, msg.twist.twist.angular.z
+        t = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+        if self.prev is not None and t > self.prev[0]:
+            dt = t - self.prev[0]
+            self.accel = ((v - self.prev[1]) / dt, (w - self.prev[2]) / dt)
+        self.prev = (t, v, w)
         a = self.alpha
         cov = [0.0] * 36
         for i in (7, 14, 21, 28):
             cov[i] = self.r_other
-        cov[0] = self.r0[0] + a[0] * v2 + a[1] * w2
-        cov[35] = self.r0[1] + a[2] * v2 + a[3] * w2
+        cov[0] = self.r0[0] + a[0] * v * v + a[1] * w * w + (self.tau[0] * self.accel[0]) ** 2
+        cov[35] = self.r0[1] + a[2] * v * v + a[3] * w * w + (self.tau[1] * self.accel[1]) ** 2
         msg.twist.covariance = cov
+        if self.delay > 0.0:
+            ns = msg.header.stamp.sec * 1_000_000_000 + msg.header.stamp.nanosec \
+                - int(round(self.delay * 1e9))
+            msg.header.stamp.sec, msg.header.stamp.nanosec = divmod(ns, 1_000_000_000)
         self.pub.publish(msg)
 
 

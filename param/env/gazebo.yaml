@@ -35,10 +35,18 @@ parameters:
     initial_pose_qy: 0.0
     initial_pose_qz: 0.999872
     initial_pose_qw: 0.015974
-  ekf_localizer:
+  # ---- オドメトリ（両方の推定器）----
+  odom_covariance:
     # diff_drive_controller の twist は 10 サンプル（50 Hz で 0.2 s）の移動平均なので、実際の動きより
-    # 約 0.09 s 遅れる（真値 /wheelchair/pose との比較で v・omega とも 0.09〜0.10 s）
+    # 約 0.09 s 遅れる（真値 /wheelchair/pose との比較で v・omega とも 0.09〜0.10 s）。stamp を戻して補正する。
+    # 左右 1 周 + 前進の録画の再生で、速度が急に変わる瞬間の yaw 誤差が両方の推定器で下がった
+    odom_delay: 0.09
+  ekf_localizer:
+    # オドメトリの遅れは odom_covariance で補正するので、ここでは 0（二重にしない）
     odom_delay: 0.00
+    # omega の Q を大きく（0.01 -> 10）：速度が急に変わったとき、omega が遅れの補正したオドメトリと NDT に早く追従する。
+    # 左右 1 周 + 前進の再生で、回転開始・反転の yaw 誤差の跳ねが約半分（反転 7 -> 4〜4.6 deg）。他は ekf.yaml の値
+    Q: [5.0e-2, 5.0e-2, 5.0e-3, 5.0e-2, 5.0e-2, 5.0e-2, 0.05, 10.0]
     # 遅れを補正しているので、yaw はオドメトリで予測できる。
     # Q を小さくして NDT の揺れ（走行中の yaw・z・roll・pitch）を抑える。
     # Gazebo の床は水平で真の z・roll・pitch は一定。x, y は LiDAR の高さ 1.14 m のレバーアームで
@@ -53,9 +61,13 @@ parameters:
     # 黙って最新の TF で代用するので、odom 側が古い（50 Hz だと最大 20 ms）分だけ回転中に yaw がずれる。
     # odom 側を速くして TF が古い時間を短くする
     frequency: 200.0
-    # vyaw を大きく：回転の切り替え（+1 -> -1 rad/s）に omega が早く追従する
-    process_noise_covariance_diag: [0.05, 0.05, 0.005, 0.05, 0.05, 0.05, 0.05, 0.025, 0.04, 0.01, 0.01, 1.0, 0.01, 0.01, 0.015]
+    # vyaw を大きく：回転の切り替え（+1 -> -1 rad/s）に omega が早く追従する。
+    # vx を大きく（0.05 -> 5）：速度が急に変わる瞬間の yaw 誤差が下がった（odom_delay と合わせて）
+    process_noise_covariance_diag: [0.05, 0.05, 0.005, 0.05, 0.05, 0.05, 5.0, 0.025, 0.04, 0.01, 0.01, 1.0, 0.01, 0.01, 0.015]
+    # odom_delay で stamp を戻したオドメトリを正しい時刻に入れるため、odom 側も巻き戻す
+    smooth_lagged_data: true
+    history_length: 1.0
   ekf_filter_node_map:
     # odom -> base を最大 0.05 s 待つ（来なければ最新で代用）
     transform_timeout: 0.05
-    process_noise_covariance_diag: [0.05, 0.05, 0.005, 0.05, 0.05, 0.05, 0.05, 0.025, 0.04, 0.01, 0.01, 1.0, 0.01, 0.01, 0.015]
+    process_noise_covariance_diag: [0.05, 0.05, 0.005, 0.05, 0.05, 0.05, 5.0, 0.025, 0.04, 0.01, 0.01, 1.0, 0.01, 0.01, 0.015]
