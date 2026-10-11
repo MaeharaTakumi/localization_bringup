@@ -57,6 +57,9 @@ parameters:
     # wheel_separation_multiplier: 1.085 で同じことを確かめた（Gazebo 側は変えない）。v は真値と一致
     odom_scale: [1.0, 0.922]
   ekf_localizer:
+    # R_ndt は ekf.yaml の値のまま（[1e-2, 1e-2, 1e-2, 0.03, 0.03, 1e-3]）。robot_localization_adapter の R_ndt
+    # （止まった状態で測った値）にすると、NDT が真値の近くの別の解に収束するのに EKF が引っ張られて振動に入りやすく、
+    # 調整に使っていない録画の再生で 8 回中 6 回悪化した（2026-10-12、dev_log.md の 17）
     # オドメトリの遅れは odom_covariance で補正するので、ここでは 0（二重にしない）
     odom_delay: 0.00
     # omega の Q を大きく（0.01 -> 10）：速度が急に変わったとき、omega が遅れの補正したオドメトリと NDT に早く追従する。
@@ -82,6 +85,13 @@ parameters:
     # odom_delay で stamp を戻したオドメトリを正しい時刻に入れるため、odom 側も巻き戻す
     smooth_lagged_data: true
     history_length: 1.0
+  robot_localization_adapter:
+    # NDT の観測ノイズ（分散、LiDAR）[x, y, z, roll, pitch, yaw]。止まった状態で「真値 + ノイズ」を初期値にして NDT を
+    # 計算し直し、その誤差の分散から求めた（localization_tools/noise/ndt_init_noise.py、録画 stops_ekf、2026-10-12）。
+    # ノイズは運用中の EKF の誤差の 2〜4 倍（x, y 0.02 m、z 0.01 m、roll, pitch 0.3°、yaw 1°）。標準偏差 x 14、y 28、
+    # z 21 mm、roll 0.20°、pitch 0.18°、yaw 0.74°（robot_localization.yaml の値は 100 mm、9.9°、1.8°）。
+    # 調整に使っていない録画の再生で、今までの値との比 0.86〜0.96（2 回）。ekf_localizer には入れない（上）
+    R_ndt: [1.85e-4, 7.8e-4, 4.26e-4, 1.22e-5, 1.03e-5, 1.66e-4]
   ekf_filter_node_map:
     # odom -> base を最大 0.05 s 待つ（来なければ最新で代用）
     transform_timeout: 0.05
