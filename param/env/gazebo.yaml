@@ -57,6 +57,10 @@ parameters:
     # wheel_separation_multiplier: 1.085 で同じことを確かめた（Gazebo 側は変えない）。v は真値と一致
     odom_scale: [1.0, 0.922]
   ekf_localizer:
+    # NDT・オドメトリで更新するたびに、その観測の時刻の事後推定値を TF・/ekf_pose に出す（2026-10-12、ユーザー指示）。
+    # 左右 1 周 + 前進の再生（調整に使っていない録画、各 4 回）で timer（20 Hz）のスコア 1.02（0.95〜1.19）→ 0.94（0.91〜0.95）。
+    # オドメトリの時刻ごとに TF が出るので、NDT が点群の時刻で引く初期値が正確になる
+    publish_trigger: update
     # R_ndt は ekf.yaml の値のまま（[1e-2, 1e-2, 1e-2, 0.03, 0.03, 1e-3]）。robot_localization_adapter の R_ndt
     # （止まった状態で測った値）にすると、NDT が真値の近くの別の解に収束するのに EKF が引っ張られて振動に入りやすく、
     # 調整に使っていない録画の再生で 8 回中 6 回悪化した（2026-10-12、dev_log.md の 17）
