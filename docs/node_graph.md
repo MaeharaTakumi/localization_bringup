@@ -65,7 +65,7 @@ flowchart LR
 
   lidar -->|"/velodyne_points"| csc
   csc -->|"/localization/points"| ndt
-  whill -->|"/Drp5_whill_red/whill_node/motor_speed_ts"| wodom
+  whill -->|"/Drp5_whill_&lt;色&gt;/whill_node/motor_speed_ts"| wodom
   wodom -->|"/wheelchair/odom"| ekf
   stf -->|"/tf_static"| ndt
   stf -->|"/tf_static"| ekf

@@ -10,6 +10,8 @@ EKF は estimator で選ぶ。ekf_localizer（既定）か robot_localization（
 
   ros2 launch localization_bringup localization.launch.py env:=gazebo estimator:=robot_localization
 
+実機の車椅子は whill:=<色>（blue・red・white。既定は env の whill）。env の topics の {whill} が Drp5_whill_<色> になる。
+
 環境は param/env/<名前>.yaml に 1 ファイルで書く（env:=<名前>）。追加するにはファイルを置いて
 colcon build する。ビルドせずに試すなら env:=/path/to/file.yaml でも読める。
 
@@ -44,6 +46,7 @@ CORRECTED_POINTS = '/localization/points'
 ODOM_WITH_COV = '/localization/odom'
 
 ESTIMATORS = ('ekf_localizer', 'robot_localization')
+WHILL_COLORS = ('blue', 'red', 'white')
 
 # robot_localization と robot_localization_adapter の間のトピック（param/robot_localization.yaml と合わせる）
 RL_NDT_POSE = '/robot_localization/ndt_pose_base'
@@ -131,7 +134,16 @@ def _launch_setup(context):
     map_path = LaunchConfiguration('map_path').perform(context)
 
     use_sim_time = bool(env.get('use_sim_time', False))
-    topics = _require(env, path, 'topics')
+    topics = dict(_require(env, path, 'topics'))
+    # 実機の車椅子：topics の {whill} を Drp5_whill_<色> にする（launch の whill が env の whill より優先）
+    whill = LaunchConfiguration('whill').perform(context) or env.get('whill', '')
+    if whill and whill not in WHILL_COLORS:
+        raise RuntimeError(f'whill "{whill}" is not supported. Available: {", ".join(WHILL_COLORS)}')
+    for key, value in topics.items():
+        if isinstance(value, str) and '{whill}' in value:
+            if not whill:
+                raise RuntimeError(f'topics.{key} uses {{whill}} but whill is not set (whill:=<color> or env whill)')
+            topics[key] = value.replace('{whill}', f'Drp5_whill_{whill}')
     base_frame_id = _require(env, path, 'base_frame_id')
     lidar_frame_id = _require(env, path, 'lidar_frame_id')
     correction = env.get('cloud_stamp_correction', 'none')
@@ -144,7 +156,8 @@ def _launch_setup(context):
 
     actions = [LogInfo(
         msg=f'[localization_bringup] env: {path} '
-            f'(use_ekf: {use_ekf}, estimator: {estimator}, launch_odometry: {launch_odometry})')]
+            f'(use_ekf: {use_ekf}, estimator: {estimator}, launch_odometry: {launch_odometry}, '
+            f'whill: {whill or "-"})')]
 
     # ---- オドメトリ（Gazebo などオドメトリを別に配信する環境では起動しない）----
     if launch_odometry:
@@ -317,5 +330,8 @@ def generate_launch_description():
             'map_path', default_value='',
             description='PCD map path (overrides map_path in the parameter files)'),
         DeclareLaunchArgument('rviz', default_value='true', description='Launch RViz'),
+        DeclareLaunchArgument(
+            'whill', default_value='',
+            description='Wheelchair color for the real robot (blue, red, white). Default: whill in the env'),
         OpaqueFunction(function=_launch_setup),
     ])

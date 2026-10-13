@@ -7,7 +7,7 @@ EKF（[ekf_localizer](https://github.com/MaeharaTakumi/ekf_localizer) か
 
 ```bash
 ros2 launch localization_bringup localization.launch.py env:=gazebo
-ros2 launch localization_bringup localization.launch.py env:=real map_path:=/path/to/map.pcd
+ros2 launch localization_bringup localization.launch.py env:=real map_path:=/path/to/map.pcd whill:=red
 ros2 launch localization_bringup localization.launch.py env:=gazebo estimator:=robot_localization
 ```
 
@@ -18,6 +18,7 @@ ros2 launch localization_bringup localization.launch.py env:=gazebo estimator:=r
 | `estimator` | `ekf_localizer` | 使う EKF。`ekf_localizer` か `robot_localization`（下記） |
 | `map_path` | （空） | PCD 地図のパス。環境ファイルの値より優先 |
 | `rviz` | `true` | RViz を起動する |
+| `whill` | （空） | 実機の車椅子の色（`blue`・`red`・`white`。ラズパイのホスト名 `Drp5_whill_<色>`）。環境ファイルの `topics` の `{whill}` を `Drp5_whill_<色>` にする。空なら環境ファイルの `whill`（`real.yaml` は `blue`） |
 
 ## 構成
 
