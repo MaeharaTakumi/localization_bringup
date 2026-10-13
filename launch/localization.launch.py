@@ -14,9 +14,13 @@ EKF は estimator で選ぶ。ekf_localizer（既定）か robot_localization（
 colcon build する。ビルドせずに試すなら env:=/path/to/file.yaml でも読める。
 
 ノードの共通パラメータは各パッケージの param/*.yaml。環境ファイルの parameters で上書きする。
+上書き（と launch が計算した値）は、ノード名の節の一時ファイルにして渡す（_scoped）。辞書のまま渡すと launch_ros が
+/** の節にするので、パッケージの yaml にノード名の節があると、そちらが優先されて上書きが効かない（rclcpp は /** の節を先、
+ノード名の節を後に当てるため。例：robot_localization.yaml の robot_localization_adapter の R_ndt）。
 """
 
 import os
+import tempfile
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
@@ -82,6 +86,20 @@ def _expand_diag(params):
     return out
 
 
+def _scoped(name, *dicts):
+    """パラメータの辞書（後ろほど優先）を、ノード名の節の一時 yaml にしてそのパスを返す.
+
+    パッケージの yaml のノード名の節より後に読まれるので、同じ名前のパラメータを確実に上書きできる。
+    """
+    params = {}
+    for d in dicts:
+        params.update(d or {})
+    with tempfile.NamedTemporaryFile(
+            'w', prefix=f'localization_bringup_{name}_', suffix='.yaml', delete=False) as f:
+        yaml.safe_dump({name: {'ros__parameters': params}}, f)
+        return f.name
+
+
 def _require(env, path, key):
     if key not in env:
         raise RuntimeError(f'"{key}" is missing in {path}')
@@ -122,9 +140,8 @@ def _launch_setup(context):
             parameters=[
                 os.path.join(
                     get_package_share_directory('whill_odometry'), 'config', 'odometry.yaml'),
-                node_params('whill_odometry'),
-                {'input_topic_name': _require(topics, path, 'motor_speed')},
-                sim_time],
+                _scoped('whill_odometry', node_params('whill_odometry'),
+                        {'input_topic_name': _require(topics, path, 'motor_speed')}, sim_time)],
             # 出力はコードで /wheelchair/odom 固定なので、topics.odom に付け替える
             remappings=[('/wheelchair/odom', topics['odom'])]))
 
@@ -158,7 +175,8 @@ def _launch_setup(context):
         actions.append(Node(
             package='pcl_localization_ros2', executable='cloud_stamp_corrector',
             name='cloud_stamp_corrector', output='screen',
-            parameters=[node_params('cloud_stamp_corrector'), {'mode': correction}, sim_time],
+            parameters=[_scoped('cloud_stamp_corrector', node_params('cloud_stamp_corrector'),
+                                {'mode': correction}, sim_time)],
             remappings=[('input', points), ('output', CORRECTED_POINTS)]))
         points = CORRECTED_POINTS
 
@@ -181,7 +199,7 @@ def _launch_setup(context):
             os.path.join(
                 get_package_share_directory('pcl_localization_ros2'), 'param',
                 'localization.yaml'),
-            node_params('pcl_localization'), ndt_params, sim_time],
+            _scoped('pcl_localization', node_params('pcl_localization'), ndt_params, sim_time)],
         remappings=[('velodyne_points', points), ('pcl_pose', '/current_pose')])
     actions += [
         ndt,
@@ -204,7 +222,7 @@ def _launch_setup(context):
                 os.path.join(
                     get_package_share_directory('localization_bringup'), 'param',
                     'odom_covariance.yaml'),
-                node_params('odom_covariance'), sim_time],
+                _scoped('odom_covariance', node_params('odom_covariance'), sim_time)],
             remappings=[('odom', topics['odom']), ('odom_out', ODOM_WITH_COV)]))
 
     # ---- EKF ----
@@ -214,13 +232,14 @@ def _launch_setup(context):
             name='ekf_localizer', output='screen',
             parameters=[
                 os.path.join(get_package_share_directory('ekf_localizer'), 'param', 'ekf.yaml'),
-                node_params('ekf_localizer'),
-                # points_topic は publish_trigger: cloud のときに購読する（stamp を直した点群）。
-                # オドメトリの R は odom_covariance が付けた共分散を使う
-                {'base_frame_id': base_frame_id, 'lidar_frame_id': lidar_frame_id,
-                 'odom_topic': ODOM_WITH_COV, 'odom_covariance_source': 'message',
-                 'points_topic': points},
-                sim_time]))
+                _scoped(
+                    'ekf_localizer', node_params('ekf_localizer'),
+                    # points_topic は publish_trigger: cloud のときに購読する（stamp を直した点群）。
+                    # オドメトリの R は odom_covariance が付けた共分散を使う
+                    {'base_frame_id': base_frame_id, 'lidar_frame_id': lidar_frame_id,
+                     'odom_topic': ODOM_WITH_COV, 'odom_covariance_source': 'message',
+                     'points_topic': points},
+                    sim_time)]))
 
     # ---- robot_localization（2 段 EKF）----
     #   adapter        NDT（LiDAR）を base に直し、オドメトリ・NDT に共分散を付けて渡す。
@@ -234,9 +253,10 @@ def _launch_setup(context):
             package='localization_bringup', executable='robot_localization_adapter.py',
             name='robot_localization_adapter', output='screen',
             parameters=[
-                rl_params, node_params('robot_localization_adapter'),
-                {'base_frame_id': base_frame_id, 'lidar_frame_id': lidar_frame_id},
-                sim_time],
+                rl_params,
+                _scoped('robot_localization_adapter', node_params('robot_localization_adapter'),
+                        {'base_frame_id': base_frame_id, 'lidar_frame_id': lidar_frame_id},
+                        sim_time)],
             remappings=[
                 ('ndt_pose', '/ndt_pose'), ('ndt_pose_base', RL_NDT_POSE),
                 ('odom', ODOM_WITH_COV), ('odom_out', RL_ODOM),
@@ -249,8 +269,9 @@ def _launch_setup(context):
             actions.append(Node(
                 package='robot_localization', executable='ekf_node', name=name, output='screen',
                 parameters=[
-                    rl_params, _expand_diag(node_params(name)), {'base_link_frame': base_frame_id},
-                    sim_time],
+                    rl_params,
+                    _scoped(name, _expand_diag(node_params(name)),
+                            {'base_link_frame': base_frame_id}, sim_time)],
                 remappings=[('odometry/filtered', odometry), ('set_pose', set_pose)]))
 
     # ---- RViz ----

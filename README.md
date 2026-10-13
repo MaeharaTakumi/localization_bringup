@@ -41,7 +41,7 @@ ros2 launch localization_bringup localization.launch.py env:=gazebo estimator:=r
 | `base_frame_id` / `lidar_frame_id` | EKF の状態・TF の基準フレームと、点群のフレーム |
 | `cloud_stamp_correction` | `none`（stamp をそのまま使う）/ `estimate`（時計のずれを推定して直す）/ `receipt`（受信時刻にする） |
 | `static_tfs` | launch が配信する静的 TF。URDF などが配信するものは書かない |
-| `parameters.<ノード名>` | ノードのパラメータの上書き（地図・初期姿勢など）。`whill_odometry` も上書きできる |
+| `parameters.<ノード名>` | ノードのパラメータの上書き（地図・初期姿勢など）。`whill_odometry` も上書きできる。launch がノード名の節の一時ファイルにして渡すので、各パッケージの yaml のノード名の節（`robot_localization.yaml` の `robot_localization_adapter:` など）より優先される |
 
 | 環境 | 内容 |
 |---|---|
