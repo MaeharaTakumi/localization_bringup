@@ -14,8 +14,8 @@ robot_localization は、姿勢の観測を base の姿勢として扱い（セ�
              → set_pose_map（map → base）と set_pose_odom（同じ値を odom フレームとして）
   出力       odometry（robot_localization の map → base）
              → ekf_pose（map → LiDAR、ekf_localizer の /ekf_pose と同じ型・QoS）
-             publish_trigger: "cloud"  点群（points）が届くたびに、その stamp の時刻の TF から作る
-                              "timer"  odometry が届くたびに作る（robot_localization の frequency）
+             publish_trigger: "timer"  odometry が届くたびに作る（robot_localization の frequency。既定）
+                              "cloud"  点群（points）が届くたびに、その stamp の時刻の TF から作る
 
 取付 base → LiDAR は静的 TF から読む。読めるまでは NDT・初期姿勢・出力を捨てる。
 """
@@ -149,7 +149,7 @@ class RobotLocalizationAdapter(Node):
             'R_ndt', [1.0e-2, 1.0e-2, 1.0e-2, 0.03, 0.03, 1.0e-3]).value)
         self.p_init = np.diag(self.declare_parameter(
             'P_init', [2.0e-1, 2.0e-1, 2.0e-1, 0.01, 0.01, 0.01]).value)
-        self.publish_trigger = self.declare_parameter('publish_trigger', 'cloud').value
+        self.publish_trigger = self.declare_parameter('publish_trigger', 'timer').value
         self.cloud_tf_timeout = self.declare_parameter('cloud_tf_timeout', 0.2).value
         if self.publish_trigger not in ('cloud', 'timer'):
             raise ValueError(f'publish_trigger must be "cloud" or "timer": {self.publish_trigger}')

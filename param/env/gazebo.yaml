@@ -89,13 +89,11 @@ parameters:
     # odom_delay で stamp を戻したオドメトリを正しい時刻に入れるため、odom 側も巻き戻す
     smooth_lagged_data: true
     history_length: 1.0
-  robot_localization_adapter:
-    # NDT の観測ノイズ（分散、LiDAR）[x, y, z, roll, pitch, yaw]。止まった状態で「真値 + ノイズ」を初期値にして NDT を
-    # 計算し直し、その誤差の分散から求めた（localization_tools/noise/ndt_init_noise.py、録画 stops_ekf、2026-10-12）。
-    # ノイズは運用中の EKF の誤差の 2〜4 倍（x, y 0.02 m、z 0.01 m、roll, pitch 0.3°、yaw 1°）。標準偏差 x 14、y 28、
-    # z 21 mm、roll 0.20°、pitch 0.18°、yaw 0.74°（robot_localization.yaml の値は 100 mm、9.9°、1.8°）。
-    # 調整に使っていない録画の再生で、今までの値との比 0.86〜0.96（2 回）。ekf_localizer には入れない（上）
-    R_ndt: [1.85e-4, 7.8e-4, 4.26e-4, 1.22e-5, 1.03e-5, 1.66e-4]
+  # robot_localization_adapter は上書きしない。R_ndt は robot_localization.yaml の値（ekf_localizer と同じ）のまま。
+  # 止まった状態で「真値 + ノイズ」を初期値にして求めた小さい R_ndt（標準偏差 x 14、y 28、z 21 mm、roll 0.20°、
+  # pitch 0.18°、yaw 0.74°。noise/ndt_init_noise.py）は、
+  # roll・pitch は小さくなるが、その場の回転と停止で NDT と振動して悪化した（回転中の yaw 0.46 -> 0.87 deg、z 10 -> 23 mm。
+  # dev_log.md の 22）ので使わない（2026-10-13、ユーザー判断）
   ekf_filter_node_map:
     # odom -> base を最大 0.05 s 待つ（来なければ最新で代用）
     transform_timeout: 0.05

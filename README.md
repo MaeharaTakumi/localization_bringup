@@ -65,8 +65,8 @@ ros2 launch localization_bringup localization.launch.py env:=gazebo estimator:=r
   （0 は 1e-9 になる）。そのため `robot_localization_adapter` が NDT の解を取付（静的 TF）で base に直し、
   NDT に `ekf_localizer` と同じ観測ノイズ（`R_ndt`）を共分散として付ける。オドメトリの共分散は `odom_covariance`（下記）が付ける。
 - オドメトリは最初の NDT が届くまで流さない（robot_localization を NDT の姿勢で初期化するため）。
-- `/ekf_pose` は `publish_trigger: "cloud"`（既定。点群が届くたびに、その stamp の時刻の TF map→LiDAR から作る）か
-  `"timer"`（`/odometry/global` が届くたび。現在時刻まで予測した値）。
+- `/ekf_pose` は `publish_trigger: "timer"`（既定。`/odometry/global` が届くたび。現在時刻まで予測した値）か
+  `"cloud"`（点群が届くたびに、その stamp の時刻の TF map→LiDAR から作る。10 Hz で、使える推定が平均約 72 ms 古くなる）。
 - `Q`・`P_init` は `ekf_localizer` の値（robot_localization の `process_noise_covariance` も時間でスケールされる）。
   NDT の遅れは `smooth_lagged_data`（`history_length` 1.0 s）で巻き戻して入れ直す。
 - `ekf_localizer` の `odom_delay`・ゲート・ロックアウトに当たる機能は使っていない。

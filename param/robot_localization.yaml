@@ -93,8 +93,11 @@ ekf_filter_node_map:
 
 robot_localization_adapter:
     ros__parameters:
-      # /ekf_pose を配信するきっかけ："cloud"（点群の stamp の時刻）or "timer"（robot_localization の frequency）
-      publish_trigger: "cloud"
+      # /ekf_pose を配信するきっかけ："timer"（map 側 EKF の出力ごと。frequency の周期で現在時刻まで予測した値）or
+      # "cloud"（点群の stamp の時刻の TF。10 Hz で、使える推定が平均約 72 ms 古くなる）。Gazebo の再生（6 つの動き）で、
+      # 実時間の誤差（各時刻に受信済みの最新の /ekf_pose）が timer で大きく小さくなった（回転中の yaw 2.7 -> 1.0 deg、
+      # 曲線 1.4 -> 0.4 deg。dev_log.md の 22）ので timer を既定にした（2026-10-13、ユーザー判断。実機では未確認）
+      publish_trigger: "timer"
       # cloud のとき、点群の stamp の TF を待つ時間 [s]。過ぎたらその点群の分は配信しない
       cloud_tf_timeout: 0.2
       # NDT の観測ノイズ（分散、LiDAR）[x, y, z, roll, pitch, yaw]。ekf_localizer の R_ndt と同じ値
