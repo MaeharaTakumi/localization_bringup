@@ -86,6 +86,19 @@ def _expand_diag(params):
     return out
 
 
+def _normalize(value):
+    """launch_ros と同じく、整数と小数が混ざった数のリストは小数にそろえる（rcl は型の違う要素のリストを読めない）."""
+    if isinstance(value, dict):
+        return {k: _normalize(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        items = [_normalize(v) for v in value]
+        nums = [v for v in items if isinstance(v, (int, float)) and not isinstance(v, bool)]
+        if items and len(nums) == len(items) and any(isinstance(v, float) for v in nums):
+            return [float(v) for v in items]
+        return items
+    return value
+
+
 def _scoped(name, *dicts):
     """パラメータの辞書（後ろほど優先）を、ノード名の節の一時 yaml にしてそのパスを返す.
 
@@ -94,6 +107,7 @@ def _scoped(name, *dicts):
     params = {}
     for d in dicts:
         params.update(d or {})
+    params = _normalize(params)
     with tempfile.NamedTemporaryFile(
             'w', prefix=f'localization_bringup_{name}_', suffix='.yaml', delete=False) as f:
         yaml.safe_dump({name: {'ros__parameters': params}}, f)
