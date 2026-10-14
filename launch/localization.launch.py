@@ -21,7 +21,9 @@ colcon build する。ビルドせずに試すなら env:=/path/to/file.yaml で
 ノード名の節を後に当てるため。例：robot_localization.yaml の robot_localization_adapter の R_ndt）。
 """
 
+import atexit
 import os
+import shutil
 import tempfile
 
 from ament_index_python.packages import get_package_share_directory
@@ -102,6 +104,18 @@ def _normalize(value):
     return value
 
 
+_TMP_DIR = None
+
+
+def _tmp_dir():
+    """一時 yaml の置き場所（launch ごとに 1 つ。launch が終わるときに消す。/tmp に溜まらないように）."""
+    global _TMP_DIR
+    if _TMP_DIR is None:
+        _TMP_DIR = tempfile.mkdtemp(prefix='localization_bringup_')
+        atexit.register(shutil.rmtree, _TMP_DIR, ignore_errors=True)
+    return _TMP_DIR
+
+
 def _scoped(name, *dicts):
     """パラメータの辞書（後ろほど優先）を、ノード名の節の一時 yaml にしてそのパスを返す.
 
@@ -112,7 +126,7 @@ def _scoped(name, *dicts):
         params.update(d or {})
     params = _normalize(params)
     with tempfile.NamedTemporaryFile(
-            'w', prefix=f'localization_bringup_{name}_', suffix='.yaml', delete=False) as f:
+            'w', prefix=f'{name}_', suffix='.yaml', dir=_tmp_dir(), delete=False) as f:
         yaml.safe_dump({name: {'ros__parameters': params}}, f)
         return f.name
 
