@@ -46,8 +46,16 @@ parameters:
     initial_pose_qy: 0.0
     initial_pose_qz: 0.999872
     initial_pose_qw: 0.015974
-  # ---- オドメトリ（ekf_localizer に渡す前に共分散と倍率を付ける）----
+  # ---- オドメトリ（odom_covariance：ekf_localizer に渡す前に、倍率と観測ノイズ R を付ける）----
+  #   R_v     = R_odom[0] + odom_noise_alpha[0]·v² + odom_noise_alpha[1]·ω² + (accel_noise_tau[0]·dv/dt)²
+  #   R_omega = R_odom[1] + odom_noise_alpha[2]·v² + odom_noise_alpha[3]·ω² + (accel_noise_tau[1]·dω/dt)²
+  #   ekf_localizer は odom_covariance_source: message でこの R を使う（ekf.yaml の R_odom ではない）。
+  #   時刻は clock_synced（launch が stamp_mode・auto_threshold を入れる）、遅れの補正は ekf_localizer の odom_delay
   odom_covariance:
+    R_odom: [2.5e-3, 5.0e-3]                 # 止まっているときの分散 [v, omega]
+    odom_noise_alpha: [0.0, 0.0, 0.0, 0.0]   # 速さに応じた分 [v²→R_v, ω²→R_v, v²→R_omega, ω²→R_omega]（試したが効かなかった）
+    R_odom_other: 1.0e-6                     # 他の成分（vy, vz, vroll, vpitch）の分散
+    accel_noise_tau: [0.0, 0.0]              # 加速度に応じた分 [τ_v, τ_omega] [s]：R に (τ·加速度)²（試したが効かなかった）
     # 回転中、オドメトリの omega は真値の 1.08〜1.09 倍（実効的な車輪間隔が 0.532〜0.535 m で、設定の 0.492 m より広い）。
     # 真値 / オドメトリ（左 0.9205、右 0.9243）の平均を掛けて補正する。diff_drive_controller の
     # wheel_separation_multiplier: 1.085 で同じことを確かめた（Gazebo 側は変えない）。v は真値と一致

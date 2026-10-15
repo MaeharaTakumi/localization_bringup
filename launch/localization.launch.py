@@ -154,7 +154,7 @@ def _launch_setup(context):
             name='whill_odometry', output='screen',
             parameters=[
                 os.path.join(
-                    get_package_share_directory('whill_odometry'), 'config', 'odometry.yaml'),
+                    get_package_share_directory('whill_odometry'), 'param', 'odometry.yaml'),
                 _scoped('whill_odometry', node_params('whill_odometry'),
                         {'input_topic_name': _require(topics, path, 'motor_speed')}, sim_time)],
             # 出力はコードで /wheelchair/odom 固定なので、topics.odom に付け替える
@@ -233,10 +233,8 @@ def _launch_setup(context):
         actions.append(Node(
             package='localization_bringup', executable='odom_covariance.py',
             name='odom_covariance', output='screen',
+            # パラメータは環境ファイルの parameters.odom_covariance（書かなければ odom_covariance.py の既定値）
             parameters=[
-                os.path.join(
-                    get_package_share_directory('localization_bringup'), 'param',
-                    'odom_covariance.yaml'),
                 _scoped('odom_covariance', node_params('odom_covariance'),
                         {'stamp_mode': odom_stamp_mode}, clock_threshold, sim_time)],
             remappings=[('odom', topics['odom']), ('odom_out', ODOM_WITH_COV)]))

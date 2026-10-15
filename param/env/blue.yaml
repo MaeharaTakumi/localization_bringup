@@ -50,3 +50,14 @@ parameters:
   # 点群の stamp の時刻で TF・ekf_pose を出すなら {publish_trigger: cloud}（既定は predict_rate の周期）
   ekf_localizer: {publish_trigger: cloud}
   cloud_stamp_corrector: {}
+  # ---- オドメトリ（odom_covariance：ekf_localizer に渡す前に、倍率と観測ノイズ R を付ける）----
+  #   R_v     = R_odom[0] + odom_noise_alpha[0]·v² + odom_noise_alpha[1]·ω² + (accel_noise_tau[0]·dv/dt)²
+  #   R_omega = R_odom[1] + odom_noise_alpha[2]·v² + odom_noise_alpha[3]·ω² + (accel_noise_tau[1]·dω/dt)²
+  #   ekf_localizer は odom_covariance_source: message でこの R を使う（ekf.yaml の R_odom ではない）。
+  #   時刻は clock_synced（launch が stamp_mode・auto_threshold を入れる）、遅れの補正は ekf_localizer の odom_delay
+  odom_covariance:
+    R_odom: [2.5e-3, 5.0e-3]                 # 止まっているときの分散 [v, omega]
+    odom_noise_alpha: [0.0, 0.0, 0.0, 0.0]   # 速さに応じた分 [v²→R_v, ω²→R_v, v²→R_omega, ω²→R_omega]（試したが効かなかった）
+    R_odom_other: 1.0e-6                     # 他の成分（vy, vz, vroll, vpitch）の分散
+    accel_noise_tau: [0.0, 0.0]              # 加速度に応じた分 [τ_v, τ_omega] [s]：R に (τ·加速度)²（試したが効かなかった）
+    odom_scale: [1.0, 1.0]                   # v・omega に掛ける倍率（実機は未校正）

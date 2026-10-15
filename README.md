@@ -56,7 +56,8 @@ Gazebo の比較で ekf_localizer と同じか、その場の回転・曲線で�
 
 `use_ekf:=true` のとき、オドメトリは `odom_covariance` を通して `/localization/odom` に中継され、v・omega に倍率（`odom_scale`）が掛かり、
 twist の共分散に速さに応じた観測ノイズ R が入る（Nav2 AMCL の `odom_alpha` と同じ考え方）。パラメータは
-[param/odom_covariance.yaml](param/odom_covariance.yaml)（環境ファイルの `parameters.odom_covariance` で上書き）。
+環境ファイルの `parameters.odom_covariance`（`gazebo.yaml`・`red.yaml`・`blue.yaml`・`white.yaml` に全部書いてある。
+書かなければ `scripts/odom_covariance.py` の既定値。2026-10-15 に `param/odom_covariance.yaml` から移した）。
 
 ```
 R_v     = R_odom[0] + odom_noise_alpha[0]·v² + odom_noise_alpha[1]·ω²
