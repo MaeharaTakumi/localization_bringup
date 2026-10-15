@@ -29,7 +29,7 @@ lidar_frame_id: velodyne
 cloud_stamp_correction: none
 
 # 取付は Gazebo の URDF（robot_state_publisher）が配信する base_footprint -> base_link -> velodyne_base_link
-# -> velodyne を使う（estimator によらない）。ここで同じ子フレームを配信すると velodyne の親が 2 つになり、
+# -> velodyne を使う。ここで同じ子フレームを配信すると velodyne の親が 2 つになり、
 # 取付として使われる値が到着順で変わる（ノードごとに違う値を読むこともある）ので、何も配信しない
 static_tfs: []
 
@@ -46,7 +46,7 @@ parameters:
     initial_pose_qy: 0.0
     initial_pose_qz: 0.999872
     initial_pose_qw: 0.015974
-  # ---- オドメトリ（両方の推定器）----
+  # ---- オドメトリ（ekf_localizer に渡す前に共分散と倍率を付ける）----
   odom_covariance:
     # オドメトリに移動平均がかかっていないので、遅れの補正はしない。
     # （0.2 s の移動平均のときは 0.09 s 戻していた：速度の変化が斜めになり、ずらすと動き出しが真値より早すぎ、
@@ -61,8 +61,8 @@ parameters:
     # 左右 1 周 + 前進の再生（調整に使っていない録画）で timer（20 Hz）のスコア平均 1.02（0.95〜1.19、4 回）→ 0.96（0.91〜1.02、6 回）。
     # オドメトリの時刻ごとに TF が出るので、NDT が点群の時刻で引く初期値が正確になる
     publish_trigger: update
-    # R_ndt は ekf.yaml の値のまま（[1e-2, 1e-2, 1e-2, 0.03, 0.03, 1e-3]）。robot_localization_adapter の R_ndt
-    # （止まった状態で測った値）にすると、NDT が真値の近くの別の解に収束するのに EKF が引っ張られて振動に入りやすく、
+    # R_ndt は ekf.yaml の値のまま（[1e-2, 1e-2, 1e-2, 0.03, 0.03, 1e-3]）。止まった状態で測った小さい R_ndt
+    # （noise/ndt_init_noise.py）にすると、NDT が真値の近くの別の解に収束するのに EKF が引っ張られて振動に入りやすく、
     # 調整に使っていない録画の再生で 8 回中 6 回悪化した（2026-10-12、dev_log.md の 17）
     # オドメトリの遅れは odom_covariance で補正するので、ここでは 0（二重にしない）
     odom_delay: 0.00
@@ -74,27 +74,3 @@ parameters:
     # Gazebo の床は水平で真の z・roll・pitch は一定。x, y は LiDAR の高さ 1.14 m のレバーアームで
     # roll・pitch と結合しているので、小さくしすぎると NDT の位置の揺れが roll・pitch に回る
     # Q: [1.0e-2, 1.0e-2, 1.0e-3, 2.0e-3, 2.0e-3, 1.0e-3, 0.05, 1.0]
-  # ---- robot_localization（estimator:=robot_localization）----
-  # 左右 1 周 + 前進（1 rad/s、1.5 m/s）の録画を再生して調整した値（tools の tune_run.py）。
-  # 15x15 の行列は <名前>_diag に対角 15 個で書く（launch が行列に直す）
-  # [x, y, z, roll, pitch, yaw, vx, vy, vz, vroll, vpitch, vyaw, ax, ay, az]
-  ekf_filter_node_odom:
-    # map 側は map -> odom を出すとき、現在時刻の odom -> base を TF から引く。引けないと robot_localization は
-    # 黙って最新の TF で代用するので、odom 側が古い（50 Hz だと最大 20 ms）分だけ回転中に yaw がずれる。
-    # odom 側を速くして TF が古い時間を短くする
-    frequency: 200.0
-    # vyaw を大きく：回転の切り替え（+1 -> -1 rad/s）に omega が早く追従する。
-    # vx を大きく（0.05 -> 5）：速度が急に変わる瞬間の yaw 誤差が下がった（odom_delay と合わせて）
-    process_noise_covariance_diag: [0.05, 0.05, 0.005, 0.05, 0.05, 0.05, 5.0, 0.025, 0.04, 0.01, 0.01, 1.0, 0.01, 0.01, 0.015]
-    # odom_delay で stamp を戻したオドメトリを正しい時刻に入れるため、odom 側も巻き戻す
-    smooth_lagged_data: true
-    history_length: 1.0
-  # robot_localization_adapter は上書きしない。R_ndt は robot_localization.yaml の値（ekf_localizer と同じ）のまま。
-  # 止まった状態で「真値 + ノイズ」を初期値にして求めた小さい R_ndt（標準偏差 x 14、y 28、z 21 mm、roll 0.20°、
-  # pitch 0.18°、yaw 0.74°。noise/ndt_init_noise.py）は、
-  # roll・pitch は小さくなるが、その場の回転と停止で NDT と振動して悪化した（回転中の yaw 0.46 -> 0.87 deg、z 10 -> 23 mm。
-  # dev_log.md の 22）ので使わない（2026-10-13、ユーザー判断）
-  ekf_filter_node_map:
-    # odom -> base を最大 0.05 s 待つ（来なければ最新で代用）
-    transform_timeout: 0.05
-    process_noise_covariance_diag: [0.05, 0.05, 0.005, 0.05, 0.05, 0.05, 5.0, 0.025, 0.04, 0.01, 0.01, 1.0, 0.01, 0.01, 0.015]

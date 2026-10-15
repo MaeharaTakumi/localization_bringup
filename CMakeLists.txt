@@ -7,8 +7,7 @@ install(DIRECTORY launch param
   DESTINATION share/${PROJECT_NAME}
 )
 
-install(PROGRAMS scripts/robot_localization_adapter.py scripts/odom_covariance.py
-  scripts/joint_state_odometry.py
+install(PROGRAMS scripts/odom_covariance.py scripts/joint_state_odometry.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

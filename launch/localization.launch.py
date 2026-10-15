@@ -6,10 +6,6 @@
   ros2 launch localization_bringup localization.launch.py env:=gazebo
   ros2 launch localization_bringup localization.launch.py env:=real map_path:=/path/to/map.pcd
 
-EKF は estimator で選ぶ。ekf_localizer（既定）か robot_localization（2 段 EKF、param/robot_localization.yaml）.
-
-  ros2 launch localization_bringup localization.launch.py env:=gazebo estimator:=robot_localization
-
 実機の車椅子は whill:=<色>（blue・red・white。既定は env の whill）。env の topics の {whill} が Drp5_whill_<色> になる。
 
 環境は param/env/<名前>.yaml に 1 ファイルで書く（env:=<名前>）。追加するにはファイルを置いて
@@ -18,7 +14,7 @@ colcon build する。ビルドせずに試すなら env:=/path/to/file.yaml で
 ノードの共通パラメータは各パッケージの param/*.yaml。環境ファイルの parameters で上書きする。
 上書き（と launch が計算した値）は、ノード名の節の一時ファイルにして渡す（_scoped）。辞書のまま渡すと launch_ros が
 /** の節にするので、パッケージの yaml にノード名の節があると、そちらが優先されて上書きが効かない（rclcpp は /** の節を先、
-ノード名の節を後に当てるため。例：robot_localization.yaml の robot_localization_adapter の R_ndt）。
+ノード名の節を後に当てるため）。
 """
 
 import atexit
@@ -44,19 +40,10 @@ import yaml
 
 # 点群の stamp を直したときの配信先
 CORRECTED_POINTS = '/localization/points'
-# odom_covariance が共分散を付けたオドメトリ（両方の推定器が購読する）
+# odom_covariance が共分散を付けたオドメトリ（ekf_localizer が購読する）
 ODOM_WITH_COV = '/localization/odom'
 
-ESTIMATORS = ('ekf_localizer', 'robot_localization')
 WHILL_COLORS = ('blue', 'red', 'white')
-
-# robot_localization と robot_localization_adapter の間のトピック（param/robot_localization.yaml と合わせる）
-RL_NDT_POSE = '/robot_localization/ndt_pose_base'
-RL_ODOM = '/robot_localization/odom'
-RL_SET_POSE_ODOM = '/ekf_filter_node_odom/set_pose'
-RL_SET_POSE_MAP = '/ekf_filter_node_map/set_pose'
-RL_ODOMETRY_ODOM = '/odometry/local'
-RL_ODOMETRY_MAP = '/odometry/global'
 
 
 def _env_dir():
@@ -76,19 +63,6 @@ def _load_env(env):
             f'env "{env}" not found ({path}). Available: {", ".join(available)}')
     with open(path) as f:
         return path, (yaml.safe_load(f) or {})
-
-
-def _expand_diag(params):
-    """robot_localization の 15x15 の行列を、対角 15 個（<名前>_diag）で書けるようにする."""
-    out = {}
-    for key, value in params.items():
-        if key.endswith('_diag'):
-            n = len(value)
-            out[key[:-len('_diag')]] = [
-                float(value[i]) if i == j else 0.0 for i in range(n) for j in range(n)]
-        else:
-            out[key] = value
-    return out
 
 
 def _normalize(value):
@@ -140,10 +114,6 @@ def _require(env, path, key):
 def _launch_setup(context):
     path, env = _load_env(LaunchConfiguration('env').perform(context))
     use_ekf = LaunchConfiguration('use_ekf').perform(context).lower() == 'true'
-    estimator = LaunchConfiguration('estimator').perform(context)
-    if estimator not in ESTIMATORS:
-        raise RuntimeError(
-            f'estimator "{estimator}" is not supported. Available: {", ".join(ESTIMATORS)}')
     use_rviz = LaunchConfiguration('rviz').perform(context).lower() == 'true'
     map_path = LaunchConfiguration('map_path').perform(context)
 
@@ -170,7 +140,7 @@ def _launch_setup(context):
 
     actions = [LogInfo(
         msg=f'[localization_bringup] env: {path} '
-            f'(use_ekf: {use_ekf}, estimator: {estimator}, launch_odometry: {launch_odometry}, '
+            f'(use_ekf: {use_ekf}, launch_odometry: {launch_odometry}, '
             f'whill: {whill or "-"})')]
 
     # ---- オドメトリ（Gazebo などオドメトリを別に配信する環境では起動しない）----
@@ -254,7 +224,7 @@ def _launch_setup(context):
             transition_id=lifecycle_msgs.msg.Transition.TRANSITION_CONFIGURE)),
     ]
 
-    # ---- オドメトリの共分散（速さに応じた R。両方の推定器で使う）----
+    # ---- オドメトリの共分散（速さに応じた R。ekf_localizer が使う）----
     if use_ekf:
         actions.append(Node(
             package='localization_bringup', executable='odom_covariance.py',
@@ -267,7 +237,7 @@ def _launch_setup(context):
             remappings=[('odom', topics['odom']), ('odom_out', ODOM_WITH_COV)]))
 
     # ---- EKF ----
-    if use_ekf and estimator == 'ekf_localizer':
+    if use_ekf:
         actions.append(Node(
             package='ekf_localizer', executable='ekf_localizer_node',
             name='ekf_localizer', output='screen',
@@ -281,39 +251,6 @@ def _launch_setup(context):
                      'odom_topic': ODOM_WITH_COV, 'odom_covariance_source': 'message',
                      'points_topic': points},
                     sim_time)]))
-
-    # ---- robot_localization（2 段 EKF）----
-    #   adapter        NDT（LiDAR）を base に直し、オドメトリ・NDT に共分散を付けて渡す。
-    #                  /initialpose を 2 つの EKF の set_pose に、map -> base を /ekf_pose（LiDAR）に直す
-    #   ekf_filter_node_odom  オドメトリだけ。odom -> base の TF
-    #   ekf_filter_node_map   NDT + オドメトリ。map -> odom の TF
-    if use_ekf and estimator == 'robot_localization':
-        rl_params = os.path.join(
-            get_package_share_directory('localization_bringup'), 'param', 'robot_localization.yaml')
-        actions.append(Node(
-            package='localization_bringup', executable='robot_localization_adapter.py',
-            name='robot_localization_adapter', output='screen',
-            parameters=[
-                rl_params,
-                _scoped('robot_localization_adapter', node_params('robot_localization_adapter'),
-                        {'base_frame_id': base_frame_id, 'lidar_frame_id': lidar_frame_id},
-                        sim_time)],
-            remappings=[
-                ('ndt_pose', '/ndt_pose'), ('ndt_pose_base', RL_NDT_POSE),
-                ('odom', ODOM_WITH_COV), ('odom_out', RL_ODOM),
-                ('initialpose', '/initialpose'),
-                ('set_pose_odom', RL_SET_POSE_ODOM), ('set_pose_map', RL_SET_POSE_MAP),
-                ('odometry', RL_ODOMETRY_MAP), ('points', points), ('ekf_pose', '/ekf_pose')]))
-        for name, odometry, set_pose in (
-                ('ekf_filter_node_odom', RL_ODOMETRY_ODOM, RL_SET_POSE_ODOM),
-                ('ekf_filter_node_map', RL_ODOMETRY_MAP, RL_SET_POSE_MAP)):
-            actions.append(Node(
-                package='robot_localization', executable='ekf_node', name=name, output='screen',
-                parameters=[
-                    rl_params,
-                    _scoped(name, _expand_diag(node_params(name)),
-                            {'base_link_frame': base_frame_id}, sim_time)],
-                remappings=[('odometry/filtered', odometry), ('set_pose', set_pose)]))
 
     # ---- RViz ----
     if use_rviz:
@@ -336,10 +273,7 @@ def generate_launch_description():
             description='Environment name (param/env/<env>.yaml) or path to an env yaml file'),
         DeclareLaunchArgument(
             'use_ekf', default_value='true',
-            description='Run an EKF (estimator). If false, NDT publishes the TF itself'),
-        DeclareLaunchArgument(
-            'estimator', default_value='ekf_localizer', choices=list(ESTIMATORS),
-            description='EKF to run when use_ekf is true'),
+            description='Run the EKF (ekf_localizer). If false, NDT publishes the TF itself'),
         DeclareLaunchArgument(
             'map_path', default_value='',
             description='PCD map path (overrides map_path in the parameter files)'),

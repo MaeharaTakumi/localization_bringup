@@ -13,7 +13,7 @@ R は分散で
   alpha の項は速さに応じた分（Nav2 AMCL の odom_alpha と同じ考え方）、accel_noise_tau の項は加速度に応じた分
   （遅れ τ のあるオドメトリの誤差は約 τ·加速度）。それ以外の成分（vy, vz, vroll, vpitch）は R_odom_other。
 odom_scale が [1, 1]、alpha・accel_noise_tau・odom_delay がすべて 0 なら、固定の R_odom で値も stamp もそのまま（今までと同じ）。
-ekf_localizer は odom_covariance_source: message で [0]・[35] を、robot_localization はそのまま使う。
+ekf_localizer は odom_covariance_source: message で [0]・[35] を使う。
 odom_delay はここで補正するので、ekf_localizer 自身の odom_delay は 0 のままにする（二重にしない）。
 """
 
