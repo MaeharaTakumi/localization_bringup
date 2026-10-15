@@ -16,6 +16,7 @@ flowchart LR
 
   subgraph LOC["localization コンテナ（localization_bringup）"]
     ndt["/pcl_localization<br/>NDT"]
+    ocov["/odom_covariance<br/>倍率・観測ノイズ R"]
     ekf["/ekf_localizer<br/>EKF"]
     rviz["/rviz2"]
   end
@@ -24,7 +25,8 @@ flowchart LR
 
   laser -->|"/velodyne_points"| ndt
   ddc -->|"/wheelchair/diff_drive_controller/odom"| bridge
-  bridge -->|"/wheelchair/odom"| ekf
+  bridge -->|"/wheelchair/odom"| ocov
+  ocov -->|"/localization/odom"| ekf
   rsp -->|"/tf_static<br/>base_footprint→base_link→velodyne"| ndt
   rsp -->|"/tf_static"| ekf
 
@@ -50,23 +52,23 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-  lidar["LiDAR PC<br/>（時計は同期していない）"]
+  lidar["LiDAR PC<br/>（時刻同期済み）"]
   whill["whill_node"]
   subgraph LOC["localization（localization_bringup）"]
     wodom["/whill_odometry"]
     stf["static_transform_publisher<br/>base_link→velodyne<br/>base_link→imu_link"]
-    csc["/cloud_stamp_corrector<br/>mode: estimate"]
     ndt["/pcl_localization<br/>NDT"]
+    ocov["/odom_covariance<br/>倍率・観測ノイズ R"]
     ekf["/ekf_localizer<br/>EKF"]
     rviz["/rviz2"]
   end
 
   user["/ekf_pose の利用者"]
 
-  lidar -->|"/velodyne_points"| csc
-  csc -->|"/localization/points"| ndt
+  lidar -->|"/velodyne_points"| ndt
   whill -->|"/Drp5_whill_&lt;色&gt;/whill_node/motor_speed_ts"| wodom
-  wodom -->|"/wheelchair/odom"| ekf
+  wodom -->|"/wheelchair/odom"| ocov
+  ocov -->|"/localization/odom"| ekf
   stf -->|"/tf_static"| ndt
   stf -->|"/tf_static"| ekf
 
@@ -74,13 +76,15 @@ flowchart LR
   ekf -->|"/tf map→base_link"| ndt
   ekf -->|"/ekf_pose"| user
 
-  csc -->|"/localization/points"| rviz
+  lidar -->|"/velodyne_points"| rviz
   ndt -->|"/current_pose, /path, /initial_map"| rviz
   rviz -->|"/initialpose"| ndt
   rviz -->|"/initialpose"| ekf
 ```
 
-- 時刻：この PC の時計です。点群は別の PC が stamp を付けるので、`cloud_stamp_correction` が `estimate`・`receipt` のときは `cloud_stamp_corrector` がこの PC の時計に直してから NDT に渡します（今の設定は `none` で、直さずに渡します）。
+- 時刻：自己位置推定の PC と LiDAR の PC（ラズパイ）は時刻同期しているので、点群の stamp をそのまま使います（`cloud_stamp_correction: none`）。
+  同期していない環境では `estimate`（時計のずれを推定して直す）か `receipt`（受信時刻にする）にすると、`cloud_stamp_corrector` が
+  直した点群（`/localization/points`）を NDT に渡します。
 - 取付：launch が環境ファイル（`red.yaml` など）の `static_tfs` を静的 TF として配信します。
 - 通信：LiDAR PC と LAN 越しに通信するので、localhost だけに絞るプロファイルは使いません。
 
@@ -113,9 +117,10 @@ sequenceDiagram
 
 | トピック | 型 | 配信 | 購読 | QoS | 周期 | 内容 |
 |---|---|---|---|---|---|---|
-| `/velodyne_points` | `sensor_msgs/PointCloud2` | Gazebo / LiDAR PC | NDT（Gazebo）、`cloud_stamp_corrector`（実機）、MATLAB | NDT 側は best effort、KeepLast(1) | 10 Hz | 点群 |
-| `/localization/points` | `sensor_msgs/PointCloud2` | `cloud_stamp_corrector` | NDT、RViz | reliable、KeepLast(1) | 10 Hz | stamp をこの PC の時計に直した点群（実機のみ） |
-| `/wheelchair/odom` | `nav_msgs/Odometry` | `gazebo_bridge` / `whill_odometry` | EKF、MATLAB | EKF 側は best effort、KeepLast(50) | 50 Hz（Gazebo） | 使うのは `twist.linear.x`（v）と `twist.angular.z`（omega） |
+| `/velodyne_points` | `sensor_msgs/PointCloud2` | Gazebo / LiDAR PC | NDT（`cloud_stamp_correction: none` のとき。今は Gazebo・実機とも）、MATLAB | NDT 側は best effort、KeepLast(1) | 10 Hz（Gazebo）、20 Hz（実機） | 点群 |
+| `/localization/points` | `sensor_msgs/PointCloud2` | `cloud_stamp_corrector` | NDT、RViz | reliable、KeepLast(1) | 点群と同じ | stamp をこの PC の時計に直した点群（`cloud_stamp_correction` が `estimate`・`receipt` のときだけ） |
+| `/wheelchair/odom` | `nav_msgs/Odometry` | `gazebo_bridge` / `whill_odometry` | `odom_covariance`、MATLAB | `odom_covariance` 側は best effort（sensor data） | 50 Hz | 使うのは `twist.linear.x`（v）と `twist.angular.z`（omega） |
+| `/localization/odom` | `nav_msgs/Odometry` | `odom_covariance` | EKF | 配信は reliable、KeepLast(10)。EKF 側は best effort、KeepLast(50) | 50 Hz | v・omega に倍率（`odom_scale`）を掛け、twist の共分散に観測ノイズ R を入れたもの（EKF は `odom_covariance_source: message` で R に使う） |
 | `/ndt_pose` | `geometry_msgs/PoseWithCovarianceStamped` | NDT | EKF | reliable、KeepLast(10) | 約 10 Hz | NDT の解。map → LiDAR、stamp は点群の取得時刻 |
 | `/ekf_pose` | `geometry_msgs/PoseWithCovarianceStamped` | EKF | MATLAB | reliable、transient_local、KeepLast(1) | 50 Hz | EKF の推定。map → LiDAR、stamp は現在時刻 |
 | `/ekf_odom` | `nav_msgs/Odometry` | EKF | （なし） | reliable、KeepLast(10) | 50 Hz | map → base の姿勢と、base 座標での v・omega |

@@ -8,7 +8,7 @@
 use_sim_time: false
 
 topics:
-  points: /velodyne_points        # 点群（別 PC が配信。時計は同期していない）
+  points: /velodyne_points        # 点群（LiDAR の PC（ラズパイ）が配信。この PC と時刻同期している）
   odom: /wheelchair/odom          # オドメトリ（whill_odometry が配信。この PC の時刻）
   motor_speed: /Drp5_whill_red/whill_node/motor_speed_ts   # whill_odometry の入力（WHILL の左右輪の速度。ラズパイのホスト名 Drp5_whill_red）
 
@@ -19,7 +19,7 @@ base_frame_id: base_link          # EKF の状態・TF（map -> base_frame_id）
 lidar_frame_id: velodyne          # 点群のフレーム
 
 # 点群の stamp の扱い
-#   none     : そのまま使う（時刻同期済み・Gazebo）
+#   none     : そのまま使う（時刻同期済み。実機・Gazebo とも今はこれ）
 #   estimate : 時計のずれを推定して直す（cloud_stamp_corrector）
 #   receipt  : この PC の受信時刻にする（cloud_stamp_corrector）
 cloud_stamp_correction: none

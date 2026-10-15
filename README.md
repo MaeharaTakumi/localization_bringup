@@ -43,7 +43,7 @@ ros2 launch localization_bringup localization.launch.py env:=white map_path:=/pa
 
 | 環境 | 内容 |
 |---|---|
-| `red`（既定）・`blue`・`white` | 実機。車椅子（`topics.motor_speed` の `Drp5_whill_<色>`。ラズパイのホスト名）だけが違い、ほかは同じ（変えるときは 3 つとも直す）。取付は launch が静的 TF で配信。whill_odometry を起動。点群の stamp は `cloud_stamp_correction`（今は `none`。時計のずれを直すなら `estimate`） |
+| `red`（既定）・`blue`・`white` | 実機。車椅子（`topics.motor_speed` の `Drp5_whill_<色>`。ラズパイのホスト名）だけが違い、ほかは同じ（変えるときは 3 つとも直す）。取付は launch が静的 TF で配信。whill_odometry を起動。点群の stamp はそのまま使う（`cloud_stamp_correction: none`。自己位置推定の PC と LiDAR の PC は時刻同期している） |
 | `gazebo` | シミュレーション。sim time。取付は URDF が配信。基準フレームは `base_footprint`。オドメトリは `/wheelchair/odom`（Gazebo の diff_drive_controller の速度の移動平均を 1 にしたもの）。omega の倍率（`odom_scale`）と R・Q を設定 |
 
 ## robot_localization（廃止）
