@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""オドメトリの twist に、時変の共分散（観測ノイズ R）を付け、遅れを補正して中継するノード.
+"""オドメトリの twist に、時変の共分散（観測ノイズ R）と倍率の補正を付けて中継するノード.
 
-  odom → odom_out（twist の v・ω に odom_scale を掛け、twist.covariance を置き換え、header.stamp を odom_delay だけ戻す。
-                   他はそのまま）
+  odom → odom_out（twist の v・ω に odom_scale を掛け、twist.covariance を置き換える。他はそのまま）
 
 odom_scale [v, ω] はオドメトリの倍率の補正（実効的な車輪間隔・車輪半径が設定と違う分）。v・ω に掛けてから使う。
 
@@ -12,9 +11,9 @@ R は分散で
   （v = twist.linear.x、ω = twist.angular.z、a = dv/dt、α = dω/dt は直前のメッセージとの差）。
   alpha の項は速さに応じた分（Nav2 AMCL の odom_alpha と同じ考え方）、accel_noise_tau の項は加速度に応じた分
   （遅れ τ のあるオドメトリの誤差は約 τ·加速度）。それ以外の成分（vy, vz, vroll, vpitch）は R_odom_other。
-odom_scale が [1, 1]、alpha・accel_noise_tau・odom_delay がすべて 0 なら、固定の R_odom で値も stamp もそのまま（今までと同じ）。
+odom_scale が [1, 1]、alpha・accel_noise_tau がすべて 0 なら、固定の R_odom で値はそのまま。
 ekf_localizer は odom_covariance_source: message で [0]・[35] を使う。
-odom_delay はここで補正するので、ekf_localizer 自身の odom_delay は 0 のままにする（二重にしない）。
+オドメトリの遅れの補正は ekf_localizer の odom_delay で行う（2026-10-15 にここの odom_delay は外した。同じことをしていたため）。
 """
 
 from nav_msgs.msg import Odometry
@@ -39,7 +38,6 @@ class OdomCovariance(Node):
         self.r_other = float(self.declare_parameter('R_odom_other', 1.0e-6, any_type).value)
         self.tau = [float(v) for v in self.declare_parameter(
             'accel_noise_tau', [0.0, 0.0], any_type).value]
-        self.delay = float(self.declare_parameter('odom_delay', 0.0, any_type).value)
         self.scale = [float(v) for v in self.declare_parameter(
             'odom_scale', [1.0, 1.0], any_type).value]
         if len(self.r0) != 2 or len(self.alpha) != 4 or len(self.tau) != 2 or len(self.scale) != 2:
@@ -52,7 +50,7 @@ class OdomCovariance(Node):
         self.create_subscription(Odometry, 'odom', self.on_odom, qos_profile_sensor_data)
         self.get_logger().info(
             f'R_odom: {self.r0}, odom_noise_alpha: {self.alpha}, '
-            f'accel_noise_tau: {self.tau}, odom_delay: {self.delay}, odom_scale: {self.scale}')
+            f'accel_noise_tau: {self.tau}, odom_scale: {self.scale}')
 
     def on_odom(self, msg):
         msg.twist.twist.linear.x *= self.scale[0]
@@ -70,10 +68,6 @@ class OdomCovariance(Node):
         cov[0] = self.r0[0] + a[0] * v * v + a[1] * w * w + (self.tau[0] * self.accel[0]) ** 2
         cov[35] = self.r0[1] + a[2] * v * v + a[3] * w * w + (self.tau[1] * self.accel[1]) ** 2
         msg.twist.covariance = cov
-        if self.delay > 0.0:
-            ns = msg.header.stamp.sec * 1_000_000_000 + msg.header.stamp.nanosec \
-                - int(round(self.delay * 1e9))
-            msg.header.stamp.sec, msg.header.stamp.nanosec = divmod(ns, 1_000_000_000)
         self.pub.publish(msg)
 
 

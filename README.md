@@ -34,7 +34,6 @@ ros2 launch localization_bringup localization.launch.py env:=white map_path:=/pa
 |---|---|
 | `use_sim_time` | Gazebo なら `true` |
 | `topics.points` / `topics.odom` | 点群とオドメトリのトピック（`topics.odom` は EKF の `odom_topic` に渡す） |
-| `whill` | 実機の車椅子の色（`blue`・`red`・`white`。ラズパイのホスト名 `Drp5_whill_<色>`）。`topics` の `{whill}` が `Drp5_whill_<色>` になる |
 | `launch_odometry` | `true` なら whill_odometry を起動する。書かなければ `false` |
 | `topics.motor_speed` | whill_odometry の入力（WHILL の左右輪の速度）。`launch_odometry: true` のとき必須。出力は `topics.odom` |
 | `base_frame_id` / `lidar_frame_id` | EKF の状態・TF の基準フレームと、点群のフレーム |
@@ -44,7 +43,7 @@ ros2 launch localization_bringup localization.launch.py env:=white map_path:=/pa
 
 | 環境 | 内容 |
 |---|---|
-| `red`（既定）・`blue`・`white` | 実機。車椅子の色（`whill`）だけが違い、ほかは同じ（変えるときは 3 つとも直す）。取付は launch が静的 TF で配信。whill_odometry を起動。点群の stamp は `cloud_stamp_correction`（今は `none`。時計のずれを直すなら `estimate`） |
+| `red`（既定）・`blue`・`white` | 実機。車椅子（`topics.motor_speed` の `Drp5_whill_<色>`。ラズパイのホスト名）だけが違い、ほかは同じ（変えるときは 3 つとも直す）。取付は launch が静的 TF で配信。whill_odometry を起動。点群の stamp は `cloud_stamp_correction`（今は `none`。時計のずれを直すなら `estimate`） |
 | `gazebo` | シミュレーション。sim time。取付は URDF が配信。基準フレームは `base_footprint`。オドメトリは `/wheelchair/odom`（Gazebo の diff_drive_controller の速度の移動平均を 1 にしたもの）。omega の倍率（`odom_scale`）と R・Q を設定 |
 
 ## robot_localization（廃止）
@@ -55,8 +54,8 @@ Gazebo の比較で ekf_localizer と同じか、その場の回転・曲線で�
 
 ## オドメトリの観測ノイズ（`odom_covariance`）
 
-`use_ekf:=true` のとき、オドメトリは `odom_covariance` を通して `/localization/odom` に中継され、twist の共分散に
-速さに応じた観測ノイズ R が入る（Nav2 AMCL の `odom_alpha` と同じ考え方）。パラメータは
+`use_ekf:=true` のとき、オドメトリは `odom_covariance` を通して `/localization/odom` に中継され、v・omega に倍率（`odom_scale`）が掛かり、
+twist の共分散に速さに応じた観測ノイズ R が入る（Nav2 AMCL の `odom_alpha` と同じ考え方）。パラメータは
 [param/odom_covariance.yaml](param/odom_covariance.yaml)（環境ファイルの `parameters.odom_covariance` で上書き）。
 
 ```
@@ -67,13 +66,13 @@ R_omega = R_odom[1] + odom_noise_alpha[2]·v² + odom_noise_alpha[3]·ω²
 - `ekf_localizer` は launch が `odom_covariance_source: message` にして `[0]`・`[35]` を R に使う。
 - `odom_noise_alpha` がすべて 0 なら、固定の `R_odom`（`ekf_localizer` の `R_odom` と同じ値）で今までと同じ。
 - `accel_noise_tau` [τ_v, τ_ω] で、加速度に応じた分 (τ·dv/dt)²・(τ·dω/dt)² も R に足せる（既定 0）。
-- `odom_delay` [s] だけ stamp を戻して、オドメトリの遅れを補正する（既定 0。`ekf_localizer` 自身の `odom_delay` は 0 のままにする）。
 - `odom_scale` [v, omega] をオドメトリの v・omega に掛ける（実効的な車輪間隔・半径が設定と違う分の補正。既定 [1, 1]）。
   Gazebo は omega 0.922（回転中、オドメトリの omega が真値の 1.08〜1.09 倍。実効的な車輪間隔 0.532〜0.535 m）。
-- Gazebo（`gazebo.yaml`）は `odom_delay: 0`。Gazebo の diff_drive_controller の速度の移動平均を 10（0.2 s）から 1（0.02 s）に
+- 速さ・加速度に応じた R は効かなかった（加速度に応じた R は、速度が変わる間オドメトリを信じなくなり悪化）。
+- オドメトリの遅れの補正は `ekf_localizer` の `odom_delay`（stamp から引いて入れる）で行う。ここにも同じ `odom_delay` があったが、
+  2026-10-15 に外した。Gazebo（`gazebo.yaml`）は `odom_delay: 0`：diff_drive_controller の速度の移動平均を 10（0.2 s）から 1（0.02 s）に
   した（Gazebo 側の `controller.yaml` の `velocity_rolling_window_size`、2026-10-12）ので、遅れの補正は要らない
-  （0.2 s の移動平均のときは 0.09 s 戻していたが、動き出しが真値より早すぎた）。速さ・加速度に応じた R は効かなかった
-  （加速度に応じた R は、速度が変わる間オドメトリを信じなくなり悪化）。
+  （0.2 s の移動平均のときは 0.09 s 戻していたが、動き出しが真値より早すぎた）。
 
 ### 車輪の角速度からのオドメトリ（`joint_state_odometry`、任意）
 

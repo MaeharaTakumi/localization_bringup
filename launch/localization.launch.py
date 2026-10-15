@@ -7,7 +7,7 @@
   ros2 launch localization_bringup localization.launch.py map_path:=/path/to/map.pcd          # 実機の車椅子 red（既定）
   ros2 launch localization_bringup localization.launch.py env:=white map_path:=/path/to/map.pcd
 
-実機は車椅子の色ごとの環境（env:=red・blue・white）で選ぶ。env の whill が色で、topics の {whill} が Drp5_whill_<色> になる。
+実機は車椅子の色ごとの環境（env:=red・blue・white）で選ぶ（トピックの Drp5_whill_<色> が違う）。
 
 環境は param/env/<名前>.yaml に 1 ファイルで書く（env:=<名前>）。追加するにはファイルを置いて
 colcon build する。ビルドせずに試すなら env:=/path/to/file.yaml でも読める。
@@ -44,7 +44,6 @@ CORRECTED_POINTS = '/localization/points'
 # odom_covariance が共分散を付けたオドメトリ（ekf_localizer が購読する）
 ODOM_WITH_COV = '/localization/odom'
 
-WHILL_COLORS = ('blue', 'red', 'white')
 
 
 def _env_dir():
@@ -120,15 +119,6 @@ def _launch_setup(context):
 
     use_sim_time = bool(env.get('use_sim_time', False))
     topics = dict(_require(env, path, 'topics'))
-    # 実機の車椅子：topics の {whill} を Drp5_whill_<色> にする（色は env の whill。env:=red・blue・white）
-    whill = env.get('whill', '')
-    if whill and whill not in WHILL_COLORS:
-        raise RuntimeError(f'whill "{whill}" is not supported. Available: {", ".join(WHILL_COLORS)}')
-    for key, value in topics.items():
-        if isinstance(value, str) and '{whill}' in value:
-            if not whill:
-                raise RuntimeError(f'topics.{key} uses {{whill}} but whill is not set in {path}')
-            topics[key] = value.replace('{whill}', f'Drp5_whill_{whill}')
     base_frame_id = _require(env, path, 'base_frame_id')
     lidar_frame_id = _require(env, path, 'lidar_frame_id')
     correction = env.get('cloud_stamp_correction', 'none')
@@ -141,8 +131,7 @@ def _launch_setup(context):
 
     actions = [LogInfo(
         msg=f'[localization_bringup] env: {path} '
-            f'(use_ekf: {use_ekf}, launch_odometry: {launch_odometry}, '
-            f'whill: {whill or "-"})')]
+            f'(use_ekf: {use_ekf}, launch_odometry: {launch_odometry})')]
 
     # ---- オドメトリ（Gazebo などオドメトリを別に配信する環境では起動しない）----
     if launch_odometry:
