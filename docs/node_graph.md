@@ -1,7 +1,7 @@
 # ノード間通信
 
 `localization.launch.py` で起動したときのノード・トピック・TF のつながりです。
-`env:=gazebo` は動作を確認済みです。`env:=real` は設定ファイルから書いたもので、実機ではまだ確認していません。
+`env:=gazebo` は動作を確認済みです。実機（`env:=red`・`blue`・`white`。車椅子の色だけが違う）は設定ファイルから書いたもので、実機ではまだ確認していません。
 
 ## Gazebo（`env:=gazebo`）
 
@@ -46,7 +46,7 @@ flowchart LR
 - 点群の stamp：sim time でそろっているので、補正しません（`cloud_stamp_correction: none`）。
 - 通信：localization コンテナ、Gazebo コンテナ、MATLAB の 3 つとも、同じ Fast DDS プロファイル（`fastdds_localhost.xml`）で localhost だけで通信します。LAN 上の他の ROS 2 とはつながりません。
 
-## 実機（`env:=real`）
+## 実機（`env:=red`・`blue`・`white`）
 
 ```mermaid
 flowchart LR
@@ -80,8 +80,8 @@ flowchart LR
   rviz -->|"/initialpose"| ekf
 ```
 
-- 時刻：この PC の時計です。点群は別の PC が stamp を付けるので、`cloud_stamp_corrector` がこの PC の時計に直してから NDT に渡します。
-- 取付：launch が `real.yaml` の `static_tfs` を静的 TF として配信します。
+- 時刻：この PC の時計です。点群は別の PC が stamp を付けるので、`cloud_stamp_correction` が `estimate`・`receipt` のときは `cloud_stamp_corrector` がこの PC の時計に直してから NDT に渡します（今の設定は `none` で、直さずに渡します）。
+- 取付：launch が環境ファイル（`red.yaml` など）の `static_tfs` を静的 TF として配信します。
 - 通信：LiDAR PC と LAN 越しに通信するので、localhost だけに絞るプロファイルは使いません。
 
 ## 処理の流れ（NDT の遅れと巻き戻し）

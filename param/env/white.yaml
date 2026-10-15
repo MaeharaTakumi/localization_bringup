@@ -1,4 +1,5 @@
-# 実機（WHILL）の環境設定。ros2 launch localization_bringup localization.launch.py env:=real
+# 実機（WHILL、車椅子 white）の環境設定。ros2 launch localization_bringup localization.launch.py env:=white
+# red.yaml（既定）と車椅子の色（whill）だけが違う。実機の設定を変えるときは red・blue・white の 3 つとも直す
 #
 # 環境を追加するときは、このファイルをコピーして param/env/<名前>.yaml を作り colcon build する
 # （ビルドせずに試すなら env:=/path/to/<名前>.yaml）。
@@ -7,8 +8,8 @@
 use_sim_time: false
 
 # 車椅子（ラズパイのホスト名 Drp5_whill_<色>）。topics の {whill} が Drp5_whill_<色> になる。
-# 色は blue・red・white（MATLAB の Project-SIP は red・white）。launch の引数 whill:=<色> で変える
-whill: blue
+# 色は blue・red・white（MATLAB の Project-SIP は red・white）。色ごとの環境ファイル（env:=red・blue・white）で選ぶ
+whill: white
 
 topics:
   points: /velodyne_points        # 点群（別 PC が配信。時計は同期していない）

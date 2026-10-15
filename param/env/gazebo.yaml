@@ -1,5 +1,5 @@
 # Gazebo の環境設定。ros2 launch localization_bringup localization.launch.py env:=gazebo
-# このファイルは launch が読む（ROS のパラメータファイルではない）。項目の説明は real.yaml
+# このファイルは launch が読む（ROS のパラメータファイルではない）。項目の説明は red.yaml
 
 use_sim_time: true
 

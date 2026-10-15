@@ -4,9 +4,10 @@
 環境ファイルに joint_state_odometry があれば、車輪の角速度（JointState）からオドメトリを計算するノードを起動する（任意）.
 
   ros2 launch localization_bringup localization.launch.py env:=gazebo
-  ros2 launch localization_bringup localization.launch.py env:=real map_path:=/path/to/map.pcd
+  ros2 launch localization_bringup localization.launch.py map_path:=/path/to/map.pcd          # 実機の車椅子 red（既定）
+  ros2 launch localization_bringup localization.launch.py env:=white map_path:=/path/to/map.pcd
 
-実機の車椅子は whill:=<色>（blue・red・white。既定は env の whill）。env の topics の {whill} が Drp5_whill_<色> になる。
+実機は車椅子の色ごとの環境（env:=red・blue・white）で選ぶ。env の whill が色で、topics の {whill} が Drp5_whill_<色> になる。
 
 環境は param/env/<名前>.yaml に 1 ファイルで書く（env:=<名前>）。追加するにはファイルを置いて
 colcon build する。ビルドせずに試すなら env:=/path/to/file.yaml でも読める。
@@ -119,14 +120,14 @@ def _launch_setup(context):
 
     use_sim_time = bool(env.get('use_sim_time', False))
     topics = dict(_require(env, path, 'topics'))
-    # 実機の車椅子：topics の {whill} を Drp5_whill_<色> にする（launch の whill が env の whill より優先）
-    whill = LaunchConfiguration('whill').perform(context) or env.get('whill', '')
+    # 実機の車椅子：topics の {whill} を Drp5_whill_<色> にする（色は env の whill。env:=red・blue・white）
+    whill = env.get('whill', '')
     if whill and whill not in WHILL_COLORS:
         raise RuntimeError(f'whill "{whill}" is not supported. Available: {", ".join(WHILL_COLORS)}')
     for key, value in topics.items():
         if isinstance(value, str) and '{whill}' in value:
             if not whill:
-                raise RuntimeError(f'topics.{key} uses {{whill}} but whill is not set (whill:=<color> or env whill)')
+                raise RuntimeError(f'topics.{key} uses {{whill}} but whill is not set in {path}')
             topics[key] = value.replace('{whill}', f'Drp5_whill_{whill}')
     base_frame_id = _require(env, path, 'base_frame_id')
     lidar_frame_id = _require(env, path, 'lidar_frame_id')
@@ -269,8 +270,8 @@ def _launch_setup(context):
 def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument(
-            'env', default_value='real',
-            description='Environment name (param/env/<env>.yaml) or path to an env yaml file'),
+            'env', default_value='red',
+            description='Environment name (param/env/<env>.yaml: gazebo, red, blue, white) or path to an env yaml file'),
         DeclareLaunchArgument(
             'use_ekf', default_value='true',
             description='Run the EKF (ekf_localizer). If false, NDT publishes the TF itself'),
@@ -278,8 +279,5 @@ def generate_launch_description():
             'map_path', default_value='',
             description='PCD map path (overrides map_path in the parameter files)'),
         DeclareLaunchArgument('rviz', default_value='true', description='Launch RViz'),
-        DeclareLaunchArgument(
-            'whill', default_value='',
-            description='Wheelchair color for the real robot (blue, red, white). Default: whill in the env'),
         OpaqueFunction(function=_launch_setup),
     ])

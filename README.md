@@ -6,16 +6,16 @@ EKF（[ekf_localizer](https://github.com/MaeharaTakumi/ekf_localizer)）を、�
 
 ```bash
 ros2 launch localization_bringup localization.launch.py env:=gazebo
-ros2 launch localization_bringup localization.launch.py env:=real map_path:=/path/to/map.pcd whill:=red
+ros2 launch localization_bringup localization.launch.py map_path:=/path/to/map.pcd             # 実機（車椅子 red。既定）
+ros2 launch localization_bringup localization.launch.py env:=white map_path:=/path/to/map.pcd   # 実機（車椅子 white）
 ```
 
 | 引数 | 既定値 | 説明 |
 |---|---|---|
-| `env` | `real` | 環境名（`param/env/<env>.yaml`）か、環境ファイルのパス |
+| `env` | `red` | 環境名（`param/env/<env>.yaml`。`gazebo`・`red`・`blue`・`white`）か、環境ファイルのパス |
 | `use_ekf` | `true` | `false` なら EKF を起動せず、NDT が TF を配信する |
 | `map_path` | （空） | PCD 地図のパス。環境ファイルの値より優先 |
 | `rviz` | `true` | RViz を起動する |
-| `whill` | （空） | 実機の車椅子の色（`blue`・`red`・`white`。ラズパイのホスト名 `Drp5_whill_<色>`）。環境ファイルの `topics` の `{whill}` を `Drp5_whill_<色>` にする。空なら環境ファイルの `whill`（`real.yaml` は `blue`） |
 
 ## 構成
 
@@ -28,12 +28,13 @@ ros2 launch localization_bringup localization.launch.py env:=real map_path:=/pat
 ## 環境を追加する
 
 `param/env/<名前>.yaml` を 1 つ置いて `colcon build` すると `env:=<名前>` で使えます
-（ビルドせずに試すなら `env:=/path/to/<名前>.yaml`）。項目は [param/env/real.yaml](param/env/real.yaml) のコメントを参照してください。
+（ビルドせずに試すなら `env:=/path/to/<名前>.yaml`）。項目は [param/env/red.yaml](param/env/red.yaml) のコメントを参照してください。
 
 | 項目 | 内容 |
 |---|---|
 | `use_sim_time` | Gazebo なら `true` |
 | `topics.points` / `topics.odom` | 点群とオドメトリのトピック（`topics.odom` は EKF の `odom_topic` に渡す） |
+| `whill` | 実機の車椅子の色（`blue`・`red`・`white`。ラズパイのホスト名 `Drp5_whill_<色>`）。`topics` の `{whill}` が `Drp5_whill_<色>` になる |
 | `launch_odometry` | `true` なら whill_odometry を起動する。書かなければ `false` |
 | `topics.motor_speed` | whill_odometry の入力（WHILL の左右輪の速度）。`launch_odometry: true` のとき必須。出力は `topics.odom` |
 | `base_frame_id` / `lidar_frame_id` | EKF の状態・TF の基準フレームと、点群のフレーム |
@@ -43,7 +44,7 @@ ros2 launch localization_bringup localization.launch.py env:=real map_path:=/pat
 
 | 環境 | 内容 |
 |---|---|
-| `real` | 実機。点群は別 PC（時計が同期していない）なので `estimate` で直す。取付は launch が静的 TF で配信。whill_odometry を起動 |
+| `red`（既定）・`blue`・`white` | 実機。車椅子の色（`whill`）だけが違い、ほかは同じ（変えるときは 3 つとも直す）。取付は launch が静的 TF で配信。whill_odometry を起動。点群の stamp は `cloud_stamp_correction`（今は `none`。時計のずれを直すなら `estimate`） |
 | `gazebo` | シミュレーション。sim time。取付は URDF が配信。基準フレームは `base_footprint`。オドメトリは `/wheelchair/odom`（Gazebo の diff_drive_controller の速度の移動平均を 1 にしたもの）。omega の倍率（`odom_scale`）と R・Q を設定 |
 
 ## robot_localization（廃止）
@@ -79,4 +80,4 @@ R_omega = R_odom[1] + odom_noise_alpha[2]·v² + odom_noise_alpha[3]·ω²
 環境ファイルに `joint_state_odometry:`（`topic`・`left_wheel_joint`・`right_wheel_joint`・`wheel_radius`・`wheel_separation`）を書くと、
 launch が `scripts/joint_state_odometry.py` を起動し、`sensor_msgs/JointState` の車輪の角速度から v = r(wR+wL)/2、
 omega = r(wR-wL)/b を計算して `topics.odom` に出す（`topics.odom` は `/localization/wheel_odom` などにする）。
-Gazebo で移動平均のかかったオドメトリの代わりに試したもの。実運用（`gazebo.yaml`・`real.yaml`）では使わない。
+Gazebo で移動平均のかかったオドメトリの代わりに試したもの。実運用（`gazebo.yaml`・`red.yaml` などの実機の環境）では使わない。
