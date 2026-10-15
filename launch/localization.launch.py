@@ -39,6 +39,8 @@ from launch_ros.events.lifecycle import ChangeState
 import lifecycle_msgs.msg
 import yaml
 
+# 点群の stamp の扱い（環境ファイルの cloud_stamp_correction）。none：そのまま、receipt：受信した時刻にする
+CLOUD_STAMP_CORRECTIONS = ('none', 'receipt')
 # 点群の stamp を直したときの配信先
 CORRECTED_POINTS = '/localization/points'
 # odom_covariance が共分散を付けたオドメトリ（ekf_localizer が購読する）
@@ -122,6 +124,10 @@ def _launch_setup(context):
     base_frame_id = _require(env, path, 'base_frame_id')
     lidar_frame_id = _require(env, path, 'lidar_frame_id')
     correction = env.get('cloud_stamp_correction', 'none')
+    if correction not in CLOUD_STAMP_CORRECTIONS:
+        raise RuntimeError(
+            f'cloud_stamp_correction "{correction}" is not supported in {path}. '
+            f'Available: {", ".join(CLOUD_STAMP_CORRECTIONS)} (estimate was removed on 2026-10-15)')
     launch_odometry = bool(env.get('launch_odometry', False))
     overrides = env.get('parameters') or {}
     sim_time = {'use_sim_time': use_sim_time}
@@ -170,14 +176,13 @@ def _launch_setup(context):
                 '--frame-id', tf['parent'], '--child-frame-id', tf['child']],
             parameters=[sim_time]))
 
-    # ---- 点群の stamp（時計が同期していない環境だけ直す）----
+    # ---- 点群の stamp（時計が同期していない環境だけ、受信した時刻にする）----
     points = topics['points']
-    if correction != 'none':
+    if correction == 'receipt':
         actions.append(Node(
             package='pcl_localization_ros2', executable='cloud_stamp_corrector',
             name='cloud_stamp_corrector', output='screen',
-            parameters=[_scoped('cloud_stamp_corrector', node_params('cloud_stamp_corrector'),
-                                {'mode': correction}, sim_time)],
+            parameters=[_scoped('cloud_stamp_corrector', node_params('cloud_stamp_corrector'), sim_time)],
             remappings=[('input', points), ('output', CORRECTED_POINTS)]))
         points = CORRECTED_POINTS
 

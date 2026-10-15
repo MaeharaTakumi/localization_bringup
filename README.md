@@ -37,7 +37,7 @@ ros2 launch localization_bringup localization.launch.py env:=white map_path:=/pa
 | `launch_odometry` | `true` なら whill_odometry を起動する。書かなければ `false` |
 | `topics.motor_speed` | whill_odometry の入力（WHILL の左右輪の速度）。`launch_odometry: true` のとき必須。出力は `topics.odom` |
 | `base_frame_id` / `lidar_frame_id` | EKF の状態・TF の基準フレームと、点群のフレーム |
-| `cloud_stamp_correction` | `none`（stamp をそのまま使う）/ `estimate`（時計のずれを推定して直す）/ `receipt`（受信時刻にする） |
+| `cloud_stamp_correction` | `none`（stamp をそのまま使う）/ `receipt`（受信時刻にする） |
 | `static_tfs` | launch が配信する静的 TF。URDF などが配信するものは書かない |
 | `parameters.<ノード名>` | ノードのパラメータの上書き（地図・初期姿勢など）。`whill_odometry` も上書きできる。launch がノード名の節の一時ファイルにして渡すので、各パッケージの yaml のノード名の節より優先される |
 

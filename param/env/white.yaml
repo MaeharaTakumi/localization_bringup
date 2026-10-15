@@ -19,9 +19,8 @@ base_frame_id: base_link          # EKF の状態・TF（map -> base_frame_id）
 lidar_frame_id: velodyne          # 点群のフレーム
 
 # 点群の stamp の扱い
-#   none     : そのまま使う（時刻同期済み。実機・Gazebo とも今はこれ）
-#   estimate : 時計のずれを推定して直す（cloud_stamp_corrector）
-#   receipt  : この PC の受信時刻にする（cloud_stamp_corrector）
+#   none    : そのまま使う（時刻同期済み。実機・Gazebo とも今はこれ）
+#   receipt : この PC の受信時刻にする（cloud_stamp_corrector。時計が同期していない環境用）
 cloud_stamp_correction: none
 
 # launch が配信する静的 TF [m], [rad]。URDF（robot_state_publisher）などが配信するものは書かない
