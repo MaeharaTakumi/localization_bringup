@@ -25,8 +25,8 @@ launch_odometry: false
 base_frame_id: base_footprint
 lidar_frame_id: velodyne
 
-# sim time で stamp が揃っているので直さない
-cloud_stamp_correction: none
+# 点群とオドメトリの時刻：sim time で stamp が揃っているのでそのまま使う（true / false / auto。red.yaml を参照）
+clock_synced: true
 
 # 取付は Gazebo の URDF（robot_state_publisher）が配信する base_footprint -> base_link -> velodyne_base_link
 # -> velodyne を使う。ここで同じ子フレームを配信すると velodyne の親が 2 つになり、

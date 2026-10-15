@@ -15,3 +15,7 @@
       accel_noise_tau: [0.0, 0.0]
       # オドメトリの倍率の補正 [v, omega]。v・omega に掛ける（実効的な車輪間隔・半径が設定と違う分）
       odom_scale: [1.0, 1.0]
+      # 時刻の決め方：stamp（そのまま）/ receipt（受信した時刻）/ auto（|受信した時刻 − stamp| が auto_threshold 以上なら受信した時刻）。
+      # launch が環境ファイルの clock_synced（true → stamp、false → receipt、auto → auto）と clock_offset_threshold から入れる
+      stamp_mode: stamp
+      auto_threshold: 0.1

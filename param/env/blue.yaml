@@ -18,10 +18,11 @@ launch_odometry: true
 base_frame_id: base_link          # EKF の状態・TF（map -> base_frame_id）の基準
 lidar_frame_id: velodyne          # 点群のフレーム
 
-# 点群の stamp の扱い
-#   none    : そのまま使う（時刻同期済み。実機・Gazebo とも今はこれ）
-#   receipt : この PC の受信時刻にする（cloud_stamp_corrector。時計が同期していない環境用）
-cloud_stamp_correction: none
+# 点群とオドメトリの時刻の決め方（点群は cloud_stamp_corrector、オドメトリは odom_covariance が行う。両方そろえる）
+#   true  : stamp をそのまま使う（時刻同期済み。今の実機はこれ）
+#   false : この PC で受信した時刻にする（時計が同期していない環境用）
+#   auto  : |受信した時刻 − stamp| が clock_offset_threshold（既定 0.1 s）以上なら受信した時刻、小さければ stamp
+clock_synced: true
 
 # launch が配信する静的 TF [m], [rad]。URDF（robot_state_publisher）などが配信するものは書かない
 static_tfs:

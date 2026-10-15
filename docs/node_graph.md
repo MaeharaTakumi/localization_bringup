@@ -45,7 +45,7 @@ flowchart LR
 ```
 
 - 時刻：Gazebo が配信する `/clock`（100 Hz）に、localization の全ノードが従います（`use_sim_time: true`）。図では省略しています。
-- 点群の stamp：sim time でそろっているので、補正しません（`cloud_stamp_correction: none`）。
+- 点群・オドメトリの stamp：sim time でそろっているので、そのまま使います（`clock_synced: true`）。
 - 通信：localization コンテナ、Gazebo コンテナ、MATLAB の 3 つとも、同じ Fast DDS プロファイル（`fastdds_localhost.xml`）で localhost だけで通信します。LAN 上の他の ROS 2 とはつながりません。
 
 ## 実機（`env:=red`・`blue`・`white`）
@@ -82,9 +82,9 @@ flowchart LR
   rviz -->|"/initialpose"| ekf
 ```
 
-- 時刻：自己位置推定の PC と LiDAR の PC（ラズパイ）は時刻同期しているので、点群の stamp をそのまま使います（`cloud_stamp_correction: none`）。
-  同期していない環境では `receipt` にすると、`cloud_stamp_corrector` が受信した時刻に直した点群（`/localization/points`）を
-  NDT に渡します（時計のずれを推定して直す `estimate` は 2026-10-15 に廃止）。
+- 時刻：自己位置推定の PC とラズパイ（点群とオドメトリの元）は時刻同期しているので、stamp をそのまま使います（`clock_synced: true`）。
+  `false`（受信した時刻にする）か `auto`（受信した時刻と 0.1 s 以上ずれていたら受信した時刻にする）にすると、
+  点群は `cloud_stamp_corrector` が直して `/localization/points` で NDT に渡し、オドメトリは `odom_covariance` が直します。
 - 取付：launch が環境ファイル（`red.yaml` など）の `static_tfs` を静的 TF として配信します。
 - 通信：LiDAR PC と LAN 越しに通信するので、localhost だけに絞るプロファイルは使いません。
 
@@ -117,8 +117,8 @@ sequenceDiagram
 
 | トピック | 型 | 配信 | 購読 | QoS | 周期 | 内容 |
 |---|---|---|---|---|---|---|
-| `/velodyne_points` | `sensor_msgs/PointCloud2` | Gazebo / LiDAR PC | NDT（`cloud_stamp_correction: none` のとき。今は Gazebo・実機とも）、MATLAB | NDT 側は best effort、KeepLast(1) | 10 Hz（Gazebo）、20 Hz（実機） | 点群 |
-| `/localization/points` | `sensor_msgs/PointCloud2` | `cloud_stamp_corrector` | NDT、RViz | reliable、KeepLast(1) | 点群と同じ | stamp をこの PC の時計に直した点群（`cloud_stamp_correction: receipt` のときだけ） |
+| `/velodyne_points` | `sensor_msgs/PointCloud2` | Gazebo / LiDAR PC | NDT（`clock_synced: true` のとき。今は Gazebo・実機とも）、MATLAB | NDT 側は best effort、KeepLast(1) | 10 Hz（Gazebo）、20 Hz（実機） | 点群 |
+| `/localization/points` | `sensor_msgs/PointCloud2` | `cloud_stamp_corrector` | NDT、RViz | reliable、KeepLast(1) | 点群と同じ | stamp をこの PC の時計に直した点群（`clock_synced` が `false`・`auto` のときだけ） |
 | `/wheelchair/odom` | `nav_msgs/Odometry` | `gazebo_bridge` / `whill_odometry` | `odom_covariance`、MATLAB | `odom_covariance` 側は best effort（sensor data） | 50 Hz | 使うのは `twist.linear.x`（v）と `twist.angular.z`（omega） |
 | `/localization/odom` | `nav_msgs/Odometry` | `odom_covariance` | EKF | 配信は reliable、KeepLast(10)。EKF 側は best effort、KeepLast(50) | 50 Hz | v・omega に倍率（`odom_scale`）を掛け、twist の共分散に観測ノイズ R を入れたもの（EKF は `odom_covariance_source: message` で R に使う） |
 | `/ndt_pose` | `geometry_msgs/PoseWithCovarianceStamped` | NDT | EKF | reliable、KeepLast(10) | 約 10 Hz | NDT の解。map → LiDAR、stamp は点群の取得時刻 |

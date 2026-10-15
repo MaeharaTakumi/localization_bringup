@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
-"""オドメトリの twist に、時変の共分散（観測ノイズ R）と倍率の補正を付けて中継するノード.
+"""オドメトリの twist に、時変の共分散（観測ノイズ R）と倍率の補正を付け、時刻を決めて中継するノード.
 
-  odom → odom_out（twist の v・ω に odom_scale を掛け、twist.covariance を置き換える。他はそのまま）
+  odom → odom_out（twist の v・ω に odom_scale を掛け、twist.covariance を置き換え、stamp_mode で header.stamp を決める。他はそのまま）
+
+stamp_mode（localization_bringup の環境ファイルの clock_synced。点群の cloud_stamp_corrector と同じ決め方）：
+  stamp（clock_synced: true） ：stamp をそのまま使う
+  receipt（false）           ：このノードが受信した時刻にする
+  auto（auto）               ：|受信した時刻 − stamp| が auto_threshold 以上なら受信した時刻、小さければ stamp（1 つずつ判断する）
+  sim time で /clock をまだ受け取っていない間（このノードの時刻が 0）は、どの stamp_mode でも stamp のまま
 
 odom_scale [v, ω] はオドメトリの倍率の補正（実効的な車輪間隔・車輪半径が設定と違う分）。v・ω に掛けてから使う。
 
@@ -40,6 +46,12 @@ class OdomCovariance(Node):
             'accel_noise_tau', [0.0, 0.0], any_type).value]
         self.scale = [float(v) for v in self.declare_parameter(
             'odom_scale', [1.0, 1.0], any_type).value]
+        self.stamp_mode = self.declare_parameter('stamp_mode', 'stamp').value
+        self.auto_threshold = float(self.declare_parameter('auto_threshold', 0.1, any_type).value)
+        if self.stamp_mode not in ('stamp', 'receipt', 'auto'):
+            raise ValueError(f'stamp_mode must be stamp, receipt or auto: {self.stamp_mode}')
+        self.count = self.count_receipt = 0
+        self.max_abs_diff = 0.0
         if len(self.r0) != 2 or len(self.alpha) != 4 or len(self.tau) != 2 or len(self.scale) != 2:
             raise ValueError('R_odom, accel_noise_tau and odom_scale need 2 values, '
                              'odom_noise_alpha needs 4 values')
@@ -50,9 +62,12 @@ class OdomCovariance(Node):
         self.create_subscription(Odometry, 'odom', self.on_odom, qos_profile_sensor_data)
         self.get_logger().info(
             f'R_odom: {self.r0}, odom_noise_alpha: {self.alpha}, '
-            f'accel_noise_tau: {self.tau}, odom_scale: {self.scale}')
+            f'accel_noise_tau: {self.tau}, odom_scale: {self.scale}, '
+            f'stamp_mode: {self.stamp_mode} (auto_threshold {self.auto_threshold} s)')
 
     def on_odom(self, msg):
+        if self.stamp_mode != 'stamp':
+            self.restamp(msg)
         msg.twist.twist.linear.x *= self.scale[0]
         msg.twist.twist.angular.z *= self.scale[1]
         v, w = msg.twist.twist.linear.x, msg.twist.twist.angular.z
@@ -69,6 +84,24 @@ class OdomCovariance(Node):
         cov[35] = self.r0[1] + a[2] * v * v + a[3] * w * w + (self.tau[1] * self.accel[1]) ** 2
         msg.twist.covariance = cov
         self.pub.publish(msg)
+
+    def restamp(self, msg):
+        """stamp_mode が receipt か、auto で受信した時刻と auto_threshold 以上ずれていれば、受信した時刻にする."""
+        now = self.get_clock().now()
+        if now.nanoseconds == 0:
+            return   # sim time で /clock をまだ受け取っていない（受信した時刻が分からない）。stamp のまま
+        diff = (now.nanoseconds - (msg.header.stamp.sec * 1_000_000_000 + msg.header.stamp.nanosec)) * 1e-9
+        use_receipt = self.stamp_mode == 'receipt' or abs(diff) >= self.auto_threshold
+        if use_receipt:
+            msg.header.stamp = now.to_msg()
+        if self.stamp_mode == 'auto':
+            self.count += 1
+            self.count_receipt += use_receipt
+            self.max_abs_diff = max(self.max_abs_diff, abs(diff))
+            self.get_logger().info(
+                f'auto: receipt time used for {self.count_receipt} of {self.count} messages '
+                f'(|receipt - stamp| latest {diff * 1e3:.1f} ms, max {self.max_abs_diff * 1e3:.1f} ms)',
+                throttle_duration_sec=10.0)
 
 
 def main():
