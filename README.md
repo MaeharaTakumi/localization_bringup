@@ -15,7 +15,7 @@ ros2 launch localization_bringup localization.launch.py env:=white map_path:=/pa
 | `env` | `red` | 環境名（`param/env/<env>.yaml`。`gazebo`・`red`・`blue`・`white`）か、環境ファイルのパス |
 | `use_ekf` | `true` | `false` なら EKF を起動せず、NDT が TF を配信する |
 | `map_path` | （空） | PCD 地図のパス。環境ファイルの値より優先 |
-| `rviz` | `true` | RViz を起動する |
+| `rviz` | `true` | RViz を起動する（`use_ekf:=true` では、点群を同じ時刻の EKF の NDT の更新値で表示するため、RViz の `/tf` を `/tf_ndt_update` に付け替える） |
 
 ## 構成
 

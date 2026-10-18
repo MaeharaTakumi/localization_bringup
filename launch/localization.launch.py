@@ -257,14 +257,20 @@ def _launch_setup(context):
 
     # ---- RViz ----
     if use_rviz:
+        # 設定ファイルの /velodyne_points を、stamp を直した点群に差し替える
+        rviz_remappings = [('/velodyne_points', points)] if points != '/velodyne_points' else []
+        if use_ekf:
+            # 点群を、同じ時刻の EKF の NDT の更新値（事後推定値）で座標変換する。ekf_localizer が
+            # publish_ndt_update_tf で tf_ndt_update に出す map -> base を /tf の代わりに読む
+            # （/tf の map -> base は点群の時刻の予測値。取付などの静的 TF は /tf_static のまま）
+            rviz_remappings.append(('/tf', '/tf_ndt_update'))
         actions.append(Node(
             package='rviz2', executable='rviz2', name='rviz2', output='screen',
             arguments=['-d', os.path.join(
                 get_package_share_directory('pcl_localization_ros2'), 'rviz',
                 'localization2.rviz')],
             parameters=[sim_time],
-            # 設定ファイルの /velodyne_points を、stamp を直した点群に差し替える
-            remappings=[('/velodyne_points', points)] if points != '/velodyne_points' else []))
+            remappings=rviz_remappings))
 
     return actions
 

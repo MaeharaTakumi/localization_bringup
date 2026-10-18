@@ -39,7 +39,9 @@ flowchart LR
   bridge -->|"/wheelchair/odom"| matlab
   matlab -->|"/wheelchair/diff_drive_controller/cmd_vel"| ddc
 
-  ndt -->|"/current_pose, /path, /initial_map, /aligned_points"| rviz
+  laser -->|"/velodyne_points"| rviz
+  ndt -->|"/current_pose, /path, /initial_map"| rviz
+  ekf -->|"/tf_ndt_update（RViz の /tf）"| rviz
   rviz -->|"/initialpose"| ndt
   rviz -->|"/initialpose"| ekf
 ```
@@ -77,7 +79,8 @@ flowchart LR
   ekf -->|"/ekf_pose"| user
 
   lidar -->|"/velodyne_points"| rviz
-  ndt -->|"/current_pose, /path, /initial_map, /aligned_points"| rviz
+  ndt -->|"/current_pose, /path, /initial_map"| rviz
+  ekf -->|"/tf_ndt_update（RViz の /tf）"| rviz
   rviz -->|"/initialpose"| ndt
   rviz -->|"/initialpose"| ekf
 ```
@@ -126,7 +129,7 @@ sequenceDiagram
 | `/ekf_odom` | `nav_msgs/Odometry` | EKF | （なし） | reliable、KeepLast(10) | 50 Hz | map → base の姿勢と、base 座標での v・omega |
 | `/current_pose` | `geometry_msgs/PoseWithCovarianceStamped` | NDT（`pcl_pose` をリマップ） | RViz | reliable、transient_local、KeepLast(1) | 約 10 Hz | NDT の解。`pose_output_frame: "lidar"` なので map → LiDAR |
 | `/path` | `nav_msgs/Path` | NDT | RViz | reliable、transient_local、KeepLast(1) | 約 10 Hz | NDT の解（base）の軌跡 |
-| `/aligned_points` | `sensor_msgs/PointCloud2` | NDT | RViz | reliable、KeepLast(1) | 点群と同じ（購読者がいるときだけ） | その点群の NDT の解（事後推定値）で map 座標に直した点群。stamp は点群の取得時刻。RViz の既定の表示（`/velodyne_points` は TF = EKF の予測値で直されるので既定では表示しない） |
+| `/tf_ndt_update` | `tf2_msgs/TFMessage` | EKF（`publish_ndt_update_tf`） | RViz（launch が RViz の `/tf` を付け替える） | reliable、KeepLast(100) | NDT と同じ | NDT で更新した直後の map → base（点群の時刻の事後推定値）。stamp は点群の取得時刻 |
 | `/initial_map` | `sensor_msgs/PointCloud2` | NDT | RViz | reliable、transient_local、KeepLast(1) | 起動時 1 回 | 読み込んだ PCD 地図 |
 | `/localization_debug` | `std_msgs/Float32MultiArray` | NDT | MATLAB | reliable、transient_local、KeepLast(1) | 約 10 Hz | [点数, align 時間 s, 収束, fitness, 初期値との角度差 deg] |
 | `/initialpose` | `geometry_msgs/PoseWithCovarianceStamped` | RViz（2D Pose Estimate） | NDT、EKF | system default | 手動 | NDT は初期姿勢を置き換え、EKF はリセットして次の NDT で初期化し直す |
@@ -135,11 +138,12 @@ sequenceDiagram
 
 | 変換 | 配信 | 使うノード |
 |---|---|---|
-| map → base（Gazebo：`base_footprint`、実機：`base_link`） | EKF（50 Hz） | NDT（点群の取得時刻の値を初期値に使う）、RViz |
+| map → base（Gazebo：`base_footprint`、実機：`base_link`） | EKF（`/tf`。`publish_trigger` の値。`cloud` なら点群の時刻の予測値） | NDT（点群の取得時刻の値を初期値に使う） |
+| map → base（RViz 用） | EKF（`/tf_ndt_update`。NDT で更新した直後の値を点群の時刻で） | RViz（`/tf` を付け替えて読む。点群 `/velodyne_points` はこの値で map に直される） |
 | `base_footprint` → `base_link` → `velodyne_base_link` → `velodyne` | `robot_state_publisher`（URDF、Gazebo） | NDT・EKF（base → LiDAR の取付として読む） |
 | `base_link` → `velodyne`、`base_link` → `imu_link` | launch の `static_transform_publisher`（実機） | NDT・EKF（同上） |
 
-`use_ekf:=false` で起動したときは EKF が起動しないので、map → base は NDT が配信し、`/ndt_pose` を購読するノードはなくなります。
+`use_ekf:=false` で起動したときは EKF が起動しないので、map → base は NDT が配信し、`/ndt_pose` を購読するノードはなくなります（RViz の `/tf` も付け替えません）。
 
 Gazebo で launch からも同じ子フレーム（`velodyne` など）を配信すると親が 2 つになり、取付として使われる値が到着順で変わります
 （ノードごとに違う値を読むこともあります）。そのため `gazebo.yaml` の `static_tfs` は空にしています。
