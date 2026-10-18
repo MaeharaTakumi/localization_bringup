@@ -39,7 +39,7 @@ flowchart LR
   bridge -->|"/wheelchair/odom"| matlab
   matlab -->|"/wheelchair/diff_drive_controller/cmd_vel"| ddc
 
-  ndt -->|"/current_pose, /path, /initial_map"| rviz
+  ndt -->|"/current_pose, /path, /initial_map, /aligned_points"| rviz
   rviz -->|"/initialpose"| ndt
   rviz -->|"/initialpose"| ekf
 ```
@@ -77,7 +77,7 @@ flowchart LR
   ekf -->|"/ekf_pose"| user
 
   lidar -->|"/velodyne_points"| rviz
-  ndt -->|"/current_pose, /path, /initial_map"| rviz
+  ndt -->|"/current_pose, /path, /initial_map, /aligned_points"| rviz
   rviz -->|"/initialpose"| ndt
   rviz -->|"/initialpose"| ekf
 ```
@@ -126,6 +126,7 @@ sequenceDiagram
 | `/ekf_odom` | `nav_msgs/Odometry` | EKF | （なし） | reliable、KeepLast(10) | 50 Hz | map → base の姿勢と、base 座標での v・omega |
 | `/current_pose` | `geometry_msgs/PoseWithCovarianceStamped` | NDT（`pcl_pose` をリマップ） | RViz | reliable、transient_local、KeepLast(1) | 約 10 Hz | NDT の解。`pose_output_frame: "lidar"` なので map → LiDAR |
 | `/path` | `nav_msgs/Path` | NDT | RViz | reliable、transient_local、KeepLast(1) | 約 10 Hz | NDT の解（base）の軌跡 |
+| `/aligned_points` | `sensor_msgs/PointCloud2` | NDT | RViz | reliable、KeepLast(1) | 点群と同じ（購読者がいるときだけ） | その点群の NDT の解（事後推定値）で map 座標に直した点群。stamp は点群の取得時刻。RViz の既定の表示（`/velodyne_points` は TF = EKF の予測値で直されるので既定では表示しない） |
 | `/initial_map` | `sensor_msgs/PointCloud2` | NDT | RViz | reliable、transient_local、KeepLast(1) | 起動時 1 回 | 読み込んだ PCD 地図 |
 | `/localization_debug` | `std_msgs/Float32MultiArray` | NDT | MATLAB | reliable、transient_local、KeepLast(1) | 約 10 Hz | [点数, align 時間 s, 収束, fitness, 初期値との角度差 deg] |
 | `/initialpose` | `geometry_msgs/PoseWithCovarianceStamped` | RViz（2D Pose Estimate） | NDT、EKF | system default | 手動 | NDT は初期姿勢を置き換え、EKF はリセットして次の NDT で初期化し直す |
