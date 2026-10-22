@@ -21,7 +21,7 @@ ros2 launch localization_bringup localization.launch.py env:=white map_path:=/pa
 
 ```
 点群 ─▶ cloud_stamp_corrector ─▶ pcl_localization (NDT) ─▶ /ndt_pose ─▶ ekf_localizer ◀─ odom_covariance ◀─ オドメトリ
-          （clock_synced が true      ▲                                      │      （倍率・観測ノイズ R・時刻）
+          （stamp_mode が stamp       ▲                                      │      （倍率・観測ノイズ R・時刻）
            でないときだけ起動）       └── TF map→LiDAR（点群の取得時刻）◀─────┘ TF map→base, /ekf_pose
 ```
 
@@ -37,13 +37,13 @@ ros2 launch localization_bringup localization.launch.py env:=white map_path:=/pa
 | `launch_odometry` | `true` なら whill_odometry を起動する。書かなければ `false` |
 | `topics.motor_speed` | whill_odometry の入力（WHILL の左右輪の速度）。`launch_odometry: true` のとき必須。出力は `topics.odom` |
 | `base_frame_id` / `lidar_frame_id` | EKF の状態・TF の基準フレームと、点群のフレーム |
-| `clock_synced` | 点群とオドメトリの時刻の決め方（両方そろえる）。`true`（既定）：stamp をそのまま使う / `false`：この PC で受信した時刻にする / `auto`：\|受信した時刻 − stamp\| が `clock_offset_threshold`（既定 0.1 s）以上なら受信した時刻、小さければ stamp（1 つずつ判断する）。点群は `cloud_stamp_corrector`（`true` 以外のとき起動）、オドメトリは `odom_covariance` が行う |
+| `stamp_mode` | 点群とオドメトリの時刻の決め方（両方そろえる）。`stamp`（既定）：stamp をそのまま使う / `receipt`：この PC で受信した時刻にする / `auto`：\|受信した時刻 − stamp\| が `clock_offset_threshold`（既定 0.1 s）以上なら受信した時刻、小さければ stamp（1 つずつ判断する）。点群は `cloud_stamp_corrector`（`stamp` 以外のとき起動。`mode` に同じ値）、オドメトリは `odom_covariance`（`stamp_mode` に同じ値）が行う。2026-10-22 に `clock_synced`（`true` / `false` / `auto`）から名前を変えた |
 | `static_tfs` | launch が配信する静的 TF。URDF などが配信するものは書かない |
 | `parameters.<ノード名>` | ノードのパラメータの上書き（地図・初期姿勢など）。`whill_odometry` も上書きできる。launch がノード名の節の一時ファイルにして渡すので、各パッケージの yaml のノード名の節より優先される |
 
 | 環境 | 内容 |
 |---|---|
-| `red`（既定）・`blue`・`white` | 実機。車椅子（`topics.motor_speed` の `Drp5_whill_<色>`。ラズパイのホスト名）だけが違い、ほかは同じ（変えるときは 3 つとも直す）。取付は launch が静的 TF で配信。whill_odometry を起動。点群・オドメトリの stamp はそのまま使う（`clock_synced: true`。自己位置推定の PC とラズパイは時刻同期している） |
+| `red`（既定）・`blue`・`white` | 実機。車椅子（`topics.motor_speed` の `Drp5_whill_<色>`。ラズパイのホスト名）だけが違い、ほかは同じ（変えるときは 3 つとも直す）。取付は launch が静的 TF で配信。whill_odometry を起動。点群・オドメトリの stamp はそのまま使う（`stamp_mode: stamp`。自己位置推定の PC とラズパイは時刻同期している） |
 | `gazebo` | シミュレーション。sim time。取付は URDF が配信。基準フレームは `base_footprint`。オドメトリは `/wheelchair/odom`（Gazebo の diff_drive_controller の速度の移動平均を 1 にしたもの）。omega の倍率（`odom_scale`）と R・Q を設定 |
 
 ## robot_localization（廃止）
@@ -65,7 +65,7 @@ R_omega = R_odom[1] + odom_noise_alpha[2]·v² + odom_noise_alpha[3]·ω²
 ```
 
 - `ekf_localizer` は launch が `odom_covariance_source: message` にして `[0]`・`[35]` を R に使う。
-- 時刻（`stamp_mode`）は launch が環境ファイルの `clock_synced` から入れる（`true` → `stamp`、`false` → `receipt`、`auto` → `auto`）。
+- 時刻（`stamp_mode`）は launch が環境ファイルの `stamp_mode` をそのまま入れる。
 - `odom_noise_alpha` がすべて 0 なら、固定の `R_odom`（`ekf_localizer` の `R_odom` と同じ値）で今までと同じ。
 - `accel_noise_tau` [τ_v, τ_ω] で、加速度に応じた分 (τ·dv/dt)²・(τ·dω/dt)² も R に足せる（既定 0）。
 - `odom_scale` [v, omega] をオドメトリの v・omega に掛ける（実効的な車輪間隔・半径が設定と違う分の補正。既定 [1, 1]）。

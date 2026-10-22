@@ -39,11 +39,11 @@ from launch_ros.events.lifecycle import ChangeState
 import lifecycle_msgs.msg
 import yaml
 
-# 環境ファイルの clock_synced（点群とオドメトリの時刻の決め方）→ cloud_stamp_corrector の mode・odom_covariance の stamp_mode
-#   true ：stamp をそのまま使う（時刻同期済み・Gazebo。cloud_stamp_corrector は起動しない）
-#   false：受信した時刻にする
-#   auto ：|受信した時刻 − stamp| が clock_offset_threshold（既定 0.1 s）以上なら受信した時刻、小さければ stamp（1 つずつ判断する）
-CLOCK_SYNCED = {True: ('stamp', None), False: ('receipt', 'receipt'), 'auto': ('auto', 'auto')}   # → (odom, 点群)
+# 環境ファイルの stamp_mode（点群とオドメトリの時刻の決め方）。odom_covariance の stamp_mode・cloud_stamp_corrector の mode にそのまま渡す
+#   stamp  ：stamp をそのまま使う（時刻同期済み・Gazebo。cloud_stamp_corrector は起動しない）
+#   receipt：受信した時刻にする
+#   auto   ：|受信した時刻 − stamp| が clock_offset_threshold（既定 0.1 s）以上なら受信した時刻、小さければ stamp（1 つずつ判断する）
+STAMP_MODES = ('stamp', 'receipt', 'auto')
 # 点群の stamp を直したときの配信先
 CORRECTED_POINTS = '/localization/points'
 # odom_covariance が共分散を付けたオドメトリ（ekf_localizer が購読する）
@@ -126,15 +126,16 @@ def _launch_setup(context):
     topics = dict(_require(env, path, 'topics'))
     base_frame_id = _require(env, path, 'base_frame_id')
     lidar_frame_id = _require(env, path, 'lidar_frame_id')
-    if 'cloud_stamp_correction' in env:
+    for old in ('cloud_stamp_correction', 'clock_synced'):
+        if old in env:
+            raise RuntimeError(
+                f'{old} in {path} was replaced by stamp_mode (stamp / receipt / auto) on 2026-10-22 '
+                '(clock_synced: true -> stamp, false -> receipt, auto -> auto)')
+    stamp_mode = env.get('stamp_mode', 'stamp')
+    if stamp_mode not in STAMP_MODES:
         raise RuntimeError(
-            f'cloud_stamp_correction in {path} was replaced by clock_synced (true / false / auto) on 2026-10-15')
-    clock_synced = env.get('clock_synced', True)
-    if isinstance(clock_synced, str) and clock_synced.lower() in ('true', 'false'):
-        clock_synced = clock_synced.lower() == 'true'
-    if clock_synced not in CLOCK_SYNCED:
-        raise RuntimeError(f'clock_synced "{clock_synced}" is not supported in {path}. Available: true, false, auto')
-    odom_stamp_mode, cloud_mode = CLOCK_SYNCED[clock_synced]
+            f'stamp_mode "{stamp_mode}" is not supported in {path}. Available: {", ".join(STAMP_MODES)}')
+    cloud_mode = None if stamp_mode == 'stamp' else stamp_mode
     clock_threshold = {'auto_threshold': float(env.get('clock_offset_threshold', 0.1))}
     launch_odometry = bool(env.get('launch_odometry', False))
     overrides = env.get('parameters') or {}
@@ -145,7 +146,7 @@ def _launch_setup(context):
 
     actions = [LogInfo(
         msg=f'[localization_bringup] env: {path} '
-            f'(use_ekf: {use_ekf}, launch_odometry: {launch_odometry}, clock_synced: {clock_synced})')]
+            f'(use_ekf: {use_ekf}, launch_odometry: {launch_odometry}, stamp_mode: {stamp_mode})')]
 
     # ---- オドメトリ（Gazebo などオドメトリを別に配信する環境では起動しない）----
     if launch_odometry:
@@ -184,7 +185,7 @@ def _launch_setup(context):
                 '--frame-id', tf['parent'], '--child-frame-id', tf['child']],
             parameters=[sim_time]))
 
-    # ---- 点群の stamp（clock_synced が true でなければ、受信した時刻にする・ずれていたら受信した時刻にする）----
+    # ---- 点群の stamp（stamp_mode が stamp でなければ、受信した時刻にする・ずれていたら受信した時刻にする）----
     points = topics['points']
     if cloud_mode:
         actions.append(Node(
@@ -228,7 +229,7 @@ def _launch_setup(context):
             transition_id=lifecycle_msgs.msg.Transition.TRANSITION_CONFIGURE)),
     ]
 
-    # ---- オドメトリの共分散・倍率・時刻（clock_synced。ekf_localizer が使う）----
+    # ---- オドメトリの共分散・倍率・時刻（stamp_mode。ekf_localizer が使う）----
     if use_ekf:
         actions.append(Node(
             package='localization_bringup', executable='odom_covariance.py',
@@ -236,7 +237,7 @@ def _launch_setup(context):
             # パラメータは環境ファイルの parameters.odom_covariance（書かなければ odom_covariance.py の既定値）
             parameters=[
                 _scoped('odom_covariance', node_params('odom_covariance'),
-                        {'stamp_mode': odom_stamp_mode}, clock_threshold, sim_time)],
+                        {'stamp_mode': stamp_mode}, clock_threshold, sim_time)],
             remappings=[('odom', topics['odom']), ('odom_out', ODOM_WITH_COV)]))
 
     # ---- EKF ----

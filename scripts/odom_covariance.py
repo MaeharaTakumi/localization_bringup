@@ -3,10 +3,10 @@
 
   odom → odom_out（twist の v・ω に odom_scale を掛け、twist.covariance を置き換え、stamp_mode で header.stamp を決める。他はそのまま）
 
-stamp_mode（localization_bringup の環境ファイルの clock_synced。点群の cloud_stamp_corrector と同じ決め方）：
-  stamp（clock_synced: true） ：stamp をそのまま使う
-  receipt（false）           ：このノードが受信した時刻にする
-  auto（auto）               ：|受信した時刻 − stamp| が auto_threshold 以上なら受信した時刻、小さければ stamp（1 つずつ判断する）
+stamp_mode（localization_bringup の環境ファイルの stamp_mode がそのまま入る。点群の cloud_stamp_corrector と同じ決め方）：
+  stamp  ：stamp をそのまま使う
+  receipt：このノードが受信した時刻にする
+  auto   ：|受信した時刻 − stamp| が auto_threshold 以上なら受信した時刻、小さければ stamp（1 つずつ判断する）
   sim time で /clock をまだ受け取っていない間（このノードの時刻が 0）は、どの stamp_mode でも stamp のまま
 
 odom_scale [v, ω] はオドメトリの倍率の補正（実効的な車輪間隔・車輪半径が設定と違う分）。v・ω に掛けてから使う。

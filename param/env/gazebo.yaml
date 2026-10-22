@@ -25,8 +25,8 @@ launch_odometry: false
 base_frame_id: base_footprint
 lidar_frame_id: velodyne
 
-# 点群とオドメトリの時刻：sim time で stamp が揃っているのでそのまま使う（true / false / auto。red.yaml を参照）
-clock_synced: true
+# 点群とオドメトリの時刻：sim time で stamp が揃っているのでそのまま使う（stamp / receipt / auto。red.yaml を参照）
+stamp_mode: stamp
 
 # 取付は Gazebo の URDF（robot_state_publisher）が配信する base_footprint -> base_link -> velodyne_base_link
 # -> velodyne を使う。ここで同じ子フレームを配信すると velodyne の親が 2 つになり、
@@ -50,7 +50,7 @@ parameters:
   #   R_v     = R_odom[0] + odom_noise_alpha[0]·v² + odom_noise_alpha[1]·ω² + (accel_noise_tau[0]·dv/dt)²
   #   R_omega = R_odom[1] + odom_noise_alpha[2]·v² + odom_noise_alpha[3]·ω² + (accel_noise_tau[1]·dω/dt)²
   #   ekf_localizer は odom_covariance_source: message でこの R を使う（ekf.yaml の R_odom ではない）。
-  #   時刻は clock_synced（launch が stamp_mode・auto_threshold を入れる）、遅れの補正は ekf_localizer の odom_delay
+  #   時刻は stamp_mode（launch が odom_covariance の stamp_mode・auto_threshold に入れる）、遅れの補正は ekf_localizer の odom_delay
   odom_covariance:
     R_odom: [2.5e-3, 5.0e-3]                 # 止まっているときの分散 [v, omega]
     odom_noise_alpha: [0.0, 0.0, 0.0, 0.0]   # 速さに応じた分 [v²→R_v, ω²→R_v, v²→R_omega, ω²→R_omega]（試したが効かなかった）

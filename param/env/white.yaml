@@ -19,10 +19,10 @@ base_frame_id: base_link          # EKF の状態・TF（map -> base_frame_id）
 lidar_frame_id: velodyne          # 点群のフレーム
 
 # 点群とオドメトリの時刻の決め方（点群は cloud_stamp_corrector、オドメトリは odom_covariance が行う。両方そろえる）
-#   true  : stamp をそのまま使う（時刻同期済み。今の実機はこれ）
-#   false : この PC で受信した時刻にする（時計が同期していない環境用）
-#   auto  : |受信した時刻 − stamp| が clock_offset_threshold（既定 0.1 s）以上なら受信した時刻、小さければ stamp
-clock_synced: true
+#   stamp  : stamp をそのまま使う（時刻同期済み。今の実機はこれ）
+#   receipt: この PC で受信した時刻にする（時計が同期していない環境用）
+#   auto   : |受信した時刻 − stamp| が clock_offset_threshold（既定 0.1 s）以上なら受信した時刻、小さければ stamp
+stamp_mode: stamp
 
 # launch が配信する静的 TF [m], [rad]。URDF（robot_state_publisher）などが配信するものは書かない
 static_tfs:
@@ -54,7 +54,7 @@ parameters:
   #   R_v     = R_odom[0] + odom_noise_alpha[0]·v² + odom_noise_alpha[1]·ω² + (accel_noise_tau[0]·dv/dt)²
   #   R_omega = R_odom[1] + odom_noise_alpha[2]·v² + odom_noise_alpha[3]·ω² + (accel_noise_tau[1]·dω/dt)²
   #   ekf_localizer は odom_covariance_source: message でこの R を使う（ekf.yaml の R_odom ではない）。
-  #   時刻は clock_synced（launch が stamp_mode・auto_threshold を入れる）、遅れの補正は ekf_localizer の odom_delay
+  #   時刻は stamp_mode（launch が odom_covariance の stamp_mode・auto_threshold に入れる）、遅れの補正は ekf_localizer の odom_delay
   odom_covariance:
     R_odom: [2.5e-3, 5.0e-3]                 # 止まっているときの分散 [v, omega]
     odom_noise_alpha: [0.0, 0.0, 0.0, 0.0]   # 速さに応じた分 [v²→R_v, ω²→R_v, v²→R_omega, ω²→R_omega]（試したが効かなかった）
