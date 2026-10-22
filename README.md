@@ -13,9 +13,9 @@ ros2 launch localization_bringup localization.launch.py env:=white map_path:=/pa
 | 引数 | 既定値 | 説明 |
 |---|---|---|
 | `env` | `red` | 環境名（`param/env/<env>.yaml`。`gazebo`・`red`・`blue`・`white`）か、環境ファイルのパス |
-| `use_ekf` | `true` | `false` なら EKF を起動せず、NDT が TF を配信する |
+| `use_ekf` | （空） | `true` / `false` で ekf_localizer と odom_covariance を起動する / しない（環境ファイルの `nodes.*.enable` より優先。空なら環境ファイルの値）。EKF を起動しないときは NDT が TF を配信する |
 | `map_path` | （空） | PCD 地図のパス。環境ファイルの値より優先 |
-| `rviz` | `true` | RViz を起動する（`use_ekf:=true` では、点群を同じ時刻の EKF の NDT の更新値で表示するため、RViz の `/tf` を `/tf_ndt_update` に付け替える） |
+| `rviz` | （空） | `true` / `false` で RViz を起動する / しない（環境ファイルの `nodes.rviz.enable` より優先。空なら環境ファイルの値）。EKF を起動するときは、点群を同じ時刻の EKF の NDT の更新値で表示するため、RViz の `/tf` を ekf_localizer の `tf_ndt_update` に付け替える |
 
 ## 構成
 
@@ -33,17 +33,16 @@ ros2 launch localization_bringup localization.launch.py env:=white map_path:=/pa
 | 項目 | 内容 |
 |---|---|
 | `use_sim_time` | Gazebo なら `true` |
-| `topics.points` / `topics.odom` | 点群とオドメトリのトピック（`topics.odom` は EKF の `odom_topic` に渡す） |
-| `launch_odometry` | `true` なら whill_odometry を起動する。書かなければ `false` |
-| `topics.motor_speed` | whill_odometry の入力（WHILL の左右輪の速度）。`launch_odometry: true` のとき必須。出力は `topics.odom` |
+| `nodes.<ノード名>.enable` | ノードを起動するか（`whill_odometry`・`joint_state_odometry`・`pcl_localization`・`odom_covariance`・`ekf_localizer`・`rviz`。全部書く）。`cloud_stamp_corrector` は書かない（`stamp_mode` が `receipt`・`auto` のときだけ起動）。止めたノードの出力は録画や別の PC から来るものとして、つなぎ方は変えない（EKF を起動しないときは NDT が TF を配信する） |
+| `nodes.<ノード名>.topics` | ノードが購読・配信するトピック（ノードの中の名前: 実際の名前）。launch はそのまま remap に渡すので、つなぐときは配信側と購読側を同じ名前にする。書かなかった名前はノードの中の名前のまま。`cloud_stamp_corrector` を起動するときは、ほかのノードで、その `input` と同じ名前のトピックを `output` に付け替える。`/tf`・`/tf_static`・`/clock` は変えない。2026-10-22 に `topics`・`launch_odometry`・`joint_state_odometry` から移した（残っていると launch がエラーで止まる） |
 | `base_frame_id` / `lidar_frame_id` | EKF の状態・TF の基準フレームと、点群のフレーム |
 | `stamp_mode` | 点群とオドメトリの時刻の決め方（両方そろえる）。`stamp`（既定）：stamp をそのまま使う / `receipt`：この PC で受信した時刻にする / `auto`：\|受信した時刻 − stamp\| が `clock_offset_threshold`（既定 0.1 s）以上なら受信した時刻、小さければ stamp（1 つずつ判断する）。点群は `cloud_stamp_corrector`（`stamp` 以外のとき起動。`mode` に同じ値）、オドメトリは `odom_covariance`（`stamp_mode` に同じ値）が行う。2026-10-22 に `clock_synced`（`true` / `false` / `auto`）から名前を変えた |
 | `static_tfs` | launch が配信する静的 TF。URDF などが配信するものは書かない |
-| `parameters.<ノード名>` | ノードのパラメータの上書き（地図・初期姿勢など）。`whill_odometry` も上書きできる。launch がノード名の節の一時ファイルにして渡すので、各パッケージの yaml のノード名の節より優先される |
+| `parameters.<ノード名>` | ノードのパラメータの上書き（地図・初期姿勢など）。`whill_odometry`・`joint_state_odometry` も上書きできる。launch がノード名の節の一時ファイルにして渡すので、各パッケージの yaml のノード名の節より優先される |
 
 | 環境 | 内容 |
 |---|---|
-| `red`（既定）・`blue`・`white` | 実機。車椅子（`topics.motor_speed` の `Drp5_whill_<色>`。ラズパイのホスト名）だけが違い、ほかは同じ（変えるときは 3 つとも直す）。取付は launch が静的 TF で配信。whill_odometry を起動。点群・オドメトリの stamp はそのまま使う（`stamp_mode: stamp`。自己位置推定の PC とラズパイは時刻同期している） |
+| `red`（既定）・`blue`・`white` | 実機。車椅子（`nodes.whill_odometry.topics.motor_speed` の `Drp5_whill_<色>`。ラズパイのホスト名）だけが違い、ほかは同じ（変えるときは 3 つとも直す）。取付は launch が静的 TF で配信。whill_odometry を起動。点群・オドメトリの stamp はそのまま使う（`stamp_mode: stamp`。自己位置推定の PC とラズパイは時刻同期している） |
 | `gazebo` | シミュレーション。sim time。取付は URDF が配信。基準フレームは `base_footprint`。オドメトリは `/wheelchair/odom`（Gazebo の diff_drive_controller の速度の移動平均を 1 にしたもの）。omega の倍率（`odom_scale`）と R・Q を設定 |
 
 ## robot_localization（廃止）
@@ -54,7 +53,7 @@ Gazebo の比較で ekf_localizer と同じか、その場の回転・曲線で�
 
 ## オドメトリの観測ノイズ（`odom_covariance`）
 
-`use_ekf:=true` のとき、オドメトリは `odom_covariance` を通して `/localization/odom` に中継され、v・omega に倍率（`odom_scale`）が掛かり、
+オドメトリは `odom_covariance` を通して `/localization/odom` に中継され、v・omega に倍率（`odom_scale`）が掛かり、
 twist の共分散に速さに応じた観測ノイズ R が入る（Nav2 AMCL の `odom_alpha` と同じ考え方）。パラメータは
 環境ファイルの `parameters.odom_covariance`（`gazebo.yaml`・`red.yaml`・`blue.yaml`・`white.yaml` に全部書いてある。
 書かなければ `scripts/odom_covariance.py` の既定値。2026-10-15 に `param/odom_covariance.yaml` から移した）。
@@ -78,7 +77,8 @@ R_omega = R_odom[1] + odom_noise_alpha[2]·v² + odom_noise_alpha[3]·ω²
 
 ### 車輪の角速度からのオドメトリ（`joint_state_odometry`、任意）
 
-環境ファイルに `joint_state_odometry:`（`topic`・`left_wheel_joint`・`right_wheel_joint`・`wheel_radius`・`wheel_separation`）を書くと、
-launch が `scripts/joint_state_odometry.py` を起動し、`sensor_msgs/JointState` の車輪の角速度から v = r(wR+wL)/2、
-omega = r(wR-wL)/b を計算して `topics.odom` に出す（`topics.odom` は `/localization/wheel_odom` などにする）。
+環境ファイルの `nodes.joint_state_odometry.enable` を `true` にすると、launch が `scripts/joint_state_odometry.py` を起動し、
+`sensor_msgs/JointState`（`joint_states`）の車輪の角速度から v = r(wR+wL)/2、omega = r(wR-wL)/b を計算して `odom` に出す
+（`gazebo.yaml` では `/localization/wheel_odom`。`nodes.odom_covariance.topics.odom` も同じ名前にする）。パラメータ（`left_wheel_joint`・
+`right_wheel_joint`・`wheel_radius`・`wheel_separation`）は `parameters.joint_state_odometry`。
 Gazebo で移動平均のかかったオドメトリの代わりに試したもの。実運用（`gazebo.yaml`・`red.yaml` などの実機の環境）では使わない。

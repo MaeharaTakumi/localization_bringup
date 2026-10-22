@@ -1,6 +1,7 @@
 # ノード間通信
 
-`localization.launch.py` で起動したときのノード・トピック・TF のつながりです。
+`localization.launch.py` で起動したときのノード・トピック・TF のつながりです（今の環境ファイルの値）。
+起動するノードとトピックの名前は、環境ファイルの `nodes.<ノード名>`（`enable`・`topics`）で変えられます。
 `env:=gazebo` は動作を確認済みです。実機（`env:=red`・`blue`・`white`。車椅子の色だけが違う）は設定ファイルから書いたもので、実機ではまだ確認していません。
 
 ## Gazebo（`env:=gazebo`）
@@ -143,7 +144,7 @@ sequenceDiagram
 | `base_footprint` → `base_link` → `velodyne_base_link` → `velodyne` | `robot_state_publisher`（URDF、Gazebo） | NDT・EKF（base → LiDAR の取付として読む） |
 | `base_link` → `velodyne`、`base_link` → `imu_link` | launch の `static_transform_publisher`（実機） | NDT・EKF（同上） |
 
-`use_ekf:=false` で起動したときは EKF が起動しないので、map → base は NDT が配信し、`/ndt_pose` を購読するノードはなくなります（RViz の `/tf` も付け替えません）。
+`use_ekf:=false`（か `nodes.ekf_localizer.enable: false`）で起動したときは EKF が起動しないので、map → base は NDT が配信し、`/ndt_pose` を購読するノードはなくなります（RViz の `/tf` も付け替えません）。
 
 Gazebo で launch からも同じ子フレーム（`velodyne` など）を配信すると親が 2 つになり、取付として使われる値が到着順で変わります
 （ノードごとに違う値を読むこともあります）。そのため `gazebo.yaml` の `static_tfs` は空にしています。

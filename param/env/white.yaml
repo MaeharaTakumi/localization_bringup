@@ -1,5 +1,5 @@
 # 実機（WHILL、車椅子 white）の環境設定。ros2 launch localization_bringup localization.launch.py env:=white
-# red.yaml（既定）と車椅子（topics.motor_speed の Drp5_whill_<色>）だけが違う。実機の設定を変えるときは red・blue・white の 3 つとも直す
+# red.yaml（既定）と車椅子（nodes.whill_odometry.topics.motor_speed の Drp5_whill_<色>）だけが違う。実機の設定を変えるときは red・blue・white の 3 つとも直す
 #
 # 環境を追加するときは、このファイルをコピーして param/env/<名前>.yaml を作り colcon build する
 # （ビルドせずに試すなら env:=/path/to/<名前>.yaml）。
@@ -7,13 +7,69 @@
 
 use_sim_time: false
 
-topics:
-  points: /velodyne_points        # 点群（LiDAR の PC（ラズパイ）が配信。この PC と時刻同期している）
-  odom: /wheelchair/odom          # オドメトリ（whill_odometry が配信。この PC の時刻）
-  motor_speed: /Drp5_whill_white/whill_node/motor_speed_ts   # whill_odometry の入力（WHILL の左右輪の速度。ラズパイのホスト名 Drp5_whill_white）
-
-# whill_odometry を起動するか。起動するときは topics.motor_speed を受け取り、topics.odom に配信する
-launch_odometry: true
+# 起動するノード（enable）と、各ノードが購読・配信するトピック（topics。ノードの中の名前: 実際の名前）。
+# launch は topics をそのまま remap に渡すので、つなぐときは配信側と購読側を同じ名前にする。/tf・/tf_static・/clock は変えない。
+# 止めたノードの出力は、録画や別の PC から来るものとして扱う（つなぎ方は変わらない）。
+# launch 引数 use_ekf:=（ekf_localizer と odom_covariance）・rviz:= を付けると、enable よりそちらが優先
+nodes:
+  # WHILL の左右輪の速度からオドメトリを計算する
+  whill_odometry:
+    enable: true
+    topics:
+      motor_speed: /Drp5_whill_white/whill_node/motor_speed_ts   # 購読：WHILL の左右輪の速度（ラズパイのホスト名 Drp5_whill_white）
+      /wheelchair/odom: /wheelchair/odom        # 配信：オドメトリ（この PC の時刻）
+      /wheelchair/accel: /wheelchair/accel      # 配信：加速度
+  # 車輪の角速度（JointState）からのオドメトリ（Gazebo で試す用。gazebo.yaml を参照）
+  joint_state_odometry:
+    enable: false
+  # 点群の stamp を直す。stamp_mode が receipt・auto のときだけ起動する（enable は書かない）。
+  # 起動するときは、ほかのノードで input と同じ名前のトピック（点群）を output に付け替える
+  cloud_stamp_corrector:
+    topics:
+      input: /velodyne_points                   # 購読：点群
+      output: /localization/points              # 配信：stamp を直した点群
+  # NDT
+  pcl_localization:
+    enable: true
+    topics:
+      velodyne_points: /velodyne_points         # 購読：点群（LiDAR の PC（ラズパイ）が配信。この PC と時刻同期している）
+      initialpose: /initialpose                 # 購読：初期姿勢（LiDAR の姿勢。RViz の 2D Pose Estimate）
+      map: /map                                 # 購読：地図（use_pcd_map: false のとき。今は PCD を読むので使わない）
+      imu: /imu                                 # 購読：IMU（use_imu: true のとき。今は使わない）
+      ndt_pose: /ndt_pose                       # 配信：NDT の解（map → LiDAR、stamp は点群の取得時刻）
+      pcl_pose: /current_pose                   # 配信：NDT の解（RViz 用）
+      path: /path                               # 配信：NDT の解の軌跡
+      initial_map: /initial_map                 # 配信：読み込んだ地図
+      localization_debug: /localization_debug   # 配信：[点数, align 時間, 収束, fitness, angle_diff]
+      tf_rviz: /tf_rviz                         # 配信：publish_rviz_tf: true のとき（launch は false にする）
+  # オドメトリに倍率・観測ノイズ R・時刻を付けて EKF に渡す
+  odom_covariance:
+    enable: true
+    topics:
+      odom: /wheelchair/odom                    # 購読：オドメトリ（whill_odometry）
+      odom_out: /localization/odom              # 配信：倍率・R・時刻を付けたオドメトリ
+  # EKF
+  ekf_localizer:
+    enable: true
+    topics:
+      ndt_pose: /ndt_pose                       # 購読：NDT の解
+      odom: /localization/odom                  # 購読：オドメトリ（odom_covariance）
+      velodyne_points: /velodyne_points         # 購読：点群（publish_trigger: cloud のとき。stamp だけ使う）
+      initialpose: /initialpose                 # 購読：初期姿勢（EKF をリセットする）
+      ekf_pose: /ekf_pose                       # 配信：推定（map → LiDAR）
+      ekf_odom: /ekf_odom                       # 配信：推定（map → base と速度）
+      tf_ndt_update: /tf_ndt_update             # 配信：NDT で更新した直後の map → base（launch が RViz の /tf をこれにする）
+  # RViz（ノードの中の名前は pcl_localization_ros2 の rviz/localization2.rviz に書いてある名前）
+  rviz:
+    enable: true
+    topics:
+      /velodyne_points: /velodyne_points        # 表示：点群
+      /current_pose: /current_pose              # 表示：NDT の解
+      /initial_map: /initial_map                # 表示：地図
+      /ekf/pose: /ekf/pose                      # 表示：EKFPose（配信するノードは無い）
+      /initialpose: /initialpose                # 配信：2D Pose Estimate
+      /goal_pose: /goal_pose                    # 配信：2D Goal Pose（使っていない）
+      /clicked_point: /clicked_point            # 配信：Publish Point（使っていない）
 
 base_frame_id: base_link          # EKF の状態・TF（map -> base_frame_id）の基準
 lidar_frame_id: velodyne          # 点群のフレーム
