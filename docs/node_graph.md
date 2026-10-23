@@ -35,6 +35,7 @@ flowchart LR
   ekf -->|"/tf map→base_footprint"| ndt
 
   ekf -->|"/ekf_pose"| matlab
+  ekf -->|"/localization/base_pose<br/>/localization/vlp16_pose<br/>/localization/vlp16_points"| matlab
   ndt -->|"/localization_debug"| matlab
   laser -->|"/velodyne_points"| matlab
   bridge -->|"/wheelchair/odom"| matlab
@@ -78,6 +79,7 @@ flowchart LR
   ndt -->|"/ndt_pose"| ekf
   ekf -->|"/tf map→base_link"| ndt
   ekf -->|"/ekf_pose"| user
+  ekf -->|"/localization/base_pose<br/>/localization/vlp16_pose<br/>/localization/vlp16_points"| user
 
   lidar -->|"/velodyne_points"| rviz
   ndt -->|"/current_pose, /path, /initial_map"| rviz
@@ -131,6 +133,9 @@ sequenceDiagram
 | `/current_pose` | `geometry_msgs/PoseWithCovarianceStamped` | NDT（`pcl_pose` をリマップ） | RViz | reliable、transient_local、KeepLast(1) | 約 10 Hz | NDT の解。`pose_output_frame: "lidar"` なので map → LiDAR |
 | `/path` | `nav_msgs/Path` | NDT | RViz | reliable、transient_local、KeepLast(1) | 約 10 Hz | NDT の解（base）の軌跡 |
 | `/tf_ndt_update` | `tf2_msgs/TFMessage` | EKF（`publish_ndt_update_tf`） | RViz（launch が RViz の `/tf` を付け替える） | reliable、KeepLast(100) | NDT と同じ | NDT で更新した直後の map → base（点群の時刻の事後推定値）。stamp は点群の取得時刻 |
+| `/localization/base_pose` | `geometry_msgs/PoseWithCovarianceStamped` | EKF（`base_pose_rate`） | MATLAB 用 | reliable、KeepLast(1) | 50 Hz | 現在時刻まで予測した map → base（後輪の間の中心）。`publish_trigger` とは別のタイマー |
+| `/localization/vlp16_pose` | `geometry_msgs/PoseWithCovarianceStamped` | EKF（`publish_vlp16_pose`） | MATLAB 用 | reliable、KeepLast(10) | NDT と同じ | NDT で更新した直後の map → LiDAR（`/tf_ndt_update` と同じ状態）。stamp は点群の取得時刻 |
+| `/localization/vlp16_points` | `sensor_msgs/PointCloud2` | EKF（`publish_vlp16_points`） | MATLAB 用 | reliable、KeepLast(2) | NDT と同じ | `/localization/vlp16_pose` の直後に出す、同じ stamp の点群（中身は `/velodyne_points` のまま）。2 つの stamp が同じなら組にする（届く順は入れ替わることがある） |
 | `/initial_map` | `sensor_msgs/PointCloud2` | NDT | RViz | reliable、transient_local、KeepLast(1) | 起動時 1 回 | 読み込んだ PCD 地図 |
 | `/localization_debug` | `std_msgs/Float32MultiArray` | NDT | MATLAB | reliable、transient_local、KeepLast(1) | 約 10 Hz | [点数, align 時間 s, 収束, fitness, 初期値との角度差 deg] |
 | `/initialpose` | `geometry_msgs/PoseWithCovarianceStamped` | RViz（2D Pose Estimate） | NDT、EKF | system default | 手動 | NDT は初期姿勢を置き換え、EKF はリセットして次の NDT で初期化し直す |

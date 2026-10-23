@@ -54,11 +54,14 @@ nodes:
     topics:
       ndt_pose: /ndt_pose                       # 購読：NDT の解
       odom: /localization/odom                  # 購読：オドメトリ（odom_covariance）
-      velodyne_points: /velodyne_points         # 購読：点群（publish_trigger: cloud のとき。stamp だけ使う）
+      velodyne_points: /velodyne_points         # 購読：点群（publish_trigger: cloud の時刻。vlp16_points で出し直す）
       initialpose: /initialpose                 # 購読：初期姿勢（EKF をリセットする）
       ekf_pose: /ekf_pose                       # 配信：推定（map → LiDAR）
       ekf_odom: /ekf_odom                       # 配信：推定（map → base と速度）
       tf_ndt_update: /tf_ndt_update             # 配信：NDT で更新した直後の map → base（launch が RViz の /tf をこれにする）
+      base_pose: /localization/base_pose        # 配信：現在時刻まで予測した map → base（base_pose_rate の周期。MATLAB 用）
+      vlp16_pose: /localization/vlp16_pose      # 配信：NDT で更新した直後の map → LiDAR（stamp は点群の時刻。MATLAB 用）
+      vlp16_points: /localization/vlp16_points  # 配信：vlp16_pose と同じ stamp の点群（MATLAB 用）
   # RViz（ノードの中の名前は pcl_localization_ros2 の rviz/localization2.rviz に書いてある名前）
   rviz:
     enable: true
