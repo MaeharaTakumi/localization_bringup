@@ -43,7 +43,8 @@ flowchart LR
 
   laser -->|"/velodyne_points"| rviz
   ndt -->|"/current_pose, /path, /initial_map"| rviz
-  ekf -->|"/tf_ndt_update（RViz の /tf）"| rviz
+  ekf -->|"/tf map→base_footprint"| rviz
+  rsp -->|"/tf_static"| rviz
   rviz -->|"/initialpose"| ndt
   rviz -->|"/initialpose"| ekf
 ```
@@ -53,6 +54,8 @@ flowchart LR
 - MATLAB：点群は `/velodyne_points` をそのまま使い、`ros2tf` で `/tf`・`/tf_static` を溜めて、後輪間中心は最新の map → base、
   LiDAR の姿勢は点群の stamp の時刻の map → velodyne を引きます（2026-10-26 から。それまでの `/localization/base_pose`・`vlp16_pose`・
   `vlp16_points` はやめた）。
+- RViz：MATLAB と同じく `/tf` をそのまま読み、点群はその stamp の時刻の map → base（予測値の補間）で、視点（Target Frame `base_link`）は
+  最新の値で表示します（2026-10-26 から。2026-10-19〜26 は `/tf` を `/tf_ndt_update`（NDT で更新した直後の値）に付け替えていた）。
 - 通信：localization コンテナ、Gazebo コンテナ、MATLAB の 3 つとも、同じ Fast DDS プロファイル（`fastdds_localhost.xml`）で localhost だけで通信します。LAN 上の他の ROS 2 とはつながりません。
 
 ## 実機（`env:=red`・`blue`・`white`）
@@ -87,7 +90,8 @@ flowchart LR
 
   lidar -->|"/velodyne_points"| rviz
   ndt -->|"/current_pose, /path, /initial_map"| rviz
-  ekf -->|"/tf_ndt_update（RViz の /tf）"| rviz
+  ekf -->|"/tf map→base_link"| rviz
+  stf -->|"/tf_static"| rviz
   rviz -->|"/initialpose"| ndt
   rviz -->|"/initialpose"| ekf
 ```
@@ -136,7 +140,7 @@ sequenceDiagram
 | `/ekf_odom` | `nav_msgs/Odometry` | EKF | （なし） | reliable、KeepLast(10) | 50 Hz | map → base の姿勢と、base 座標での v・omega |
 | `/current_pose` | `geometry_msgs/PoseWithCovarianceStamped` | NDT（`pcl_pose` をリマップ） | RViz | reliable、transient_local、KeepLast(1) | 約 10 Hz | NDT の解。`pose_output_frame: "lidar"` なので map → LiDAR |
 | `/path` | `nav_msgs/Path` | NDT | RViz | reliable、transient_local、KeepLast(1) | 約 10 Hz | NDT の解（base）の軌跡 |
-| `/tf_ndt_update` | `tf2_msgs/TFMessage` | EKF（`publish_ndt_update_tf`） | RViz（launch が RViz の `/tf` を付け替える） | reliable、KeepLast(100) | NDT と同じ | NDT で更新した直後の map → base（点群の時刻の事後推定値）。stamp は点群の取得時刻 |
+| `/tf_ndt_update` | `tf2_msgs/TFMessage` | EKF（`publish_ndt_update_tf`） | 録画・評価（`plot_matlab_outputs.py`・`plot_prior_posterior.py`） | reliable、KeepLast(100) | NDT と同じ | NDT で更新した直後の map → base（点群の時刻の事後推定値）。stamp は点群の取得時刻。2026-10-19〜26 は RViz の `/tf` をこれに付け替えていた |
 | `/initial_map` | `sensor_msgs/PointCloud2` | NDT | RViz | reliable、transient_local、KeepLast(1) | 起動時 1 回 | 読み込んだ PCD 地図 |
 | `/localization_debug` | `std_msgs/Float32MultiArray` | NDT | MATLAB | reliable、transient_local、KeepLast(1) | 約 10 Hz | [点数, align 時間 s, 収束, fitness, 初期値との角度差 deg] |
 | `/initialpose` | `geometry_msgs/PoseWithCovarianceStamped` | RViz（2D Pose Estimate） | NDT、EKF | system default | 手動 | NDT は初期姿勢を置き換え、EKF はリセットして次の NDT で初期化し直す |
@@ -145,12 +149,11 @@ sequenceDiagram
 
 | 変換 | 配信 | 使うノード |
 |---|---|---|
-| map → base（Gazebo：`base_footprint`、実機：`base_link`） | EKF（`/tf`。`predict_rate` 50 Hz の周期で、現在時刻まで予測した値） | NDT（点群の取得時刻の値を補間して初期値に使う）、MATLAB（最新の値を後輪間中心に、点群の取得時刻の値を点群の座標変換に使う） |
-| map → base（RViz 用） | EKF（`/tf_ndt_update`。NDT で更新した直後の値を点群の時刻で） | RViz（`/tf` を付け替えて読む。点群 `/velodyne_points` はこの値で map に直される） |
-| `base_footprint` → `base_link` → `velodyne_base_link` → `velodyne` | `robot_state_publisher`（URDF、Gazebo） | NDT・EKF（base → LiDAR の取付として読む）、MATLAB |
-| `base_link` → `velodyne`、`base_link` → `imu_link` | launch の `static_transform_publisher`（実機） | NDT・EKF（同上）、MATLAB |
+| map → base（Gazebo：`base_footprint`、実機：`base_link`） | EKF（`/tf`。`predict_rate` 50 Hz の周期で、現在時刻まで予測した値） | NDT（点群の取得時刻の値を補間して初期値に使う）、MATLAB・RViz（最新の値を後輪間中心（RViz は視点の Target Frame `base_link`）に、点群の取得時刻の値を点群の座標変換に使う） |
+| `base_footprint` → `base_link` → `velodyne_base_link` → `velodyne` | `robot_state_publisher`（URDF、Gazebo） | NDT・EKF（base → LiDAR の取付として読む）、MATLAB・RViz |
+| `base_link` → `velodyne`、`base_link` → `imu_link` | launch の `static_transform_publisher`（実機） | NDT・EKF（同上）、MATLAB・RViz |
 
-`use_ekf:=false`（か `nodes.ekf_localizer.enable: false`）で起動したときは EKF が起動しないので、map → base は NDT が配信し、`/ndt_pose` を購読するノードはなくなります（RViz の `/tf` も付け替えません）。
+`use_ekf:=false`（か `nodes.ekf_localizer.enable: false`）で起動したときは EKF が起動しないので、map → base は NDT が配信し、`/ndt_pose` を購読するノードはなくなります。
 
 Gazebo で launch からも同じ子フレーム（`velodyne` など）を配信すると親が 2 つになり、取付として使われる値が到着順で変わります
 （ノードごとに違う値を読むこともあります）。そのため `gazebo.yaml` の `static_tfs` は空にしています。

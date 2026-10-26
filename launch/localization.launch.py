@@ -315,13 +315,10 @@ def _launch_setup(context):
 
     # ---- RViz ----
     if 'rviz' in enabled:
+        # RViz は /tf をそのまま読む（MATLAB と同じ）：点群はその stamp の時刻の map -> base（ekf_localizer の
+        # 50 Hz の予測値を補間）で、視点（Target Frame base_link）は最新の値で表示する。2026-10-19〜26 は /tf を
+        # ekf_localizer の tf_ndt_update（NDT で更新した直後の値）に付け替えていた（dev_log.md の 53・69）
         rviz_remappings = remappings('rviz')
-        if use_ekf:
-            # 点群を、同じ時刻の EKF の NDT の更新値（事後推定値）で座標変換する。ekf_localizer が
-            # publish_ndt_update_tf で tf_ndt_update に出す map -> base を /tf の代わりに読む
-            # （/tf の map -> base は点群の時刻の予測値。取付などの静的 TF は /tf_static のまま）
-            rviz_remappings.append(
-                ('/tf', topics['ekf_localizer'].get('tf_ndt_update', '/tf_ndt_update')))
         actions.append(Node(
             package='rviz2', executable='rviz2', name='rviz2', output='screen',
             arguments=['-d', os.path.join(

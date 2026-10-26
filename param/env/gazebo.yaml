@@ -57,7 +57,7 @@ nodes:
       initialpose: /initialpose                 # 購読：初期姿勢（EKF をリセットする）
       ekf_pose: /ekf_pose                       # 配信：推定（map → LiDAR）
       ekf_odom: /ekf_odom                       # 配信：推定（map → base と速度）
-      tf_ndt_update: /tf_ndt_update             # 配信：NDT で更新した直後の map → base（launch が RViz の /tf をこれにする）
+      tf_ndt_update: /tf_ndt_update             # 配信：NDT で更新した直後の map → base（点群の時刻。録画と評価用）
   # RViz（ノードの中の名前は pcl_localization_ros2 の rviz/localization2.rviz に書いてある名前）
   rviz:
     enable: true

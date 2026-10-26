@@ -15,7 +15,7 @@ ros2 launch localization_bringup localization.launch.py env:=white map_path:=/pa
 | `env` | `red` | 環境名（`param/env/<env>.yaml`。`gazebo`・`red`・`blue`・`white`）か、環境ファイルのパス |
 | `use_ekf` | （空） | `true` / `false` で ekf_localizer と odom_covariance を起動する / しない（環境ファイルの `nodes.*.enable` より優先。空なら環境ファイルの値）。EKF を起動しないときは NDT が TF を配信する |
 | `map_path` | （空） | PCD 地図のパス。環境ファイルの値より優先 |
-| `rviz` | （空） | `true` / `false` で RViz を起動する / しない（環境ファイルの `nodes.rviz.enable` より優先。空なら環境ファイルの値）。EKF を起動するときは、点群を同じ時刻の EKF の NDT の更新値で表示するため、RViz の `/tf` を ekf_localizer の `tf_ndt_update` に付け替える |
+| `rviz` | （空） | `true` / `false` で RViz を起動する / しない（環境ファイルの `nodes.rviz.enable` より優先。空なら環境ファイルの値）。RViz は `/tf` をそのまま読み、点群をその stamp の時刻の TF（ekf_localizer の予測値の補間。MATLAB・NDT の初期値と同じ）で表示する（2026-10-19〜26 は `/tf` を `tf_ndt_update` に付け替えていた） |
 
 ## 構成
 
