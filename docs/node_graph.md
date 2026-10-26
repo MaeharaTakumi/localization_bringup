@@ -55,7 +55,7 @@ flowchart LR
   LiDAR の姿勢は点群の stamp の時刻の map → velodyne を引きます（2026-10-26 から。それまでの `/localization/base_pose`・`vlp16_pose`・
   `vlp16_points` はやめた）。
 - RViz：MATLAB と同じく `/tf` をそのまま読み、点群はその stamp の時刻の map → base（予測値の補間）で、視点（Target Frame `base_link`）は
-  最新の値で表示します（2026-10-26 から。2026-10-19〜26 は `/tf` を `/tf_ndt_update`（NDT で更新した直後の値）に付け替えていた）。
+  最新の値で表示します（2026-10-26 から。2026-10-19〜26 は `/tf` を ekf_localizer の `/tf_ndt_update`（NDT で更新した直後の値）に付け替えていた。`/tf_ndt_update` と RViz の EKFPose（`/ekf/pose`）の表示は 2026-10-26 にやめた）。
 - 通信：localization コンテナ、Gazebo コンテナ、MATLAB の 3 つとも、同じ Fast DDS プロファイル（`fastdds_localhost.xml`）で localhost だけで通信します。LAN 上の他の ROS 2 とはつながりません。
 
 ## 実機（`env:=red`・`blue`・`white`）
@@ -140,7 +140,6 @@ sequenceDiagram
 | `/ekf_odom` | `nav_msgs/Odometry` | EKF | （なし） | reliable、KeepLast(10) | 50 Hz | map → base の姿勢と、base 座標での v・omega |
 | `/current_pose` | `geometry_msgs/PoseWithCovarianceStamped` | NDT（`pcl_pose` をリマップ） | RViz | reliable、transient_local、KeepLast(1) | 約 10 Hz | NDT の解。`pose_output_frame: "lidar"` なので map → LiDAR |
 | `/path` | `nav_msgs/Path` | NDT | RViz | reliable、transient_local、KeepLast(1) | 約 10 Hz | NDT の解（base）の軌跡 |
-| `/tf_ndt_update` | `tf2_msgs/TFMessage` | EKF（`publish_ndt_update_tf`） | 録画・評価（`plot_matlab_outputs.py`・`plot_prior_posterior.py`） | reliable、KeepLast(100) | NDT と同じ | NDT で更新した直後の map → base（点群の時刻の事後推定値）。stamp は点群の取得時刻。2026-10-19〜26 は RViz の `/tf` をこれに付け替えていた |
 | `/initial_map` | `sensor_msgs/PointCloud2` | NDT | RViz | reliable、transient_local、KeepLast(1) | 起動時 1 回 | 読み込んだ PCD 地図 |
 | `/localization_debug` | `std_msgs/Float32MultiArray` | NDT | MATLAB | reliable、transient_local、KeepLast(1) | 約 10 Hz | [点数, align 時間 s, 収束, fitness, 初期値との角度差 deg] |
 | `/initialpose` | `geometry_msgs/PoseWithCovarianceStamped` | RViz（2D Pose Estimate） | NDT、EKF | system default | 手動 | NDT は初期姿勢を置き換え、EKF はリセットして次の NDT で初期化し直す |

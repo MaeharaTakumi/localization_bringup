@@ -58,7 +58,6 @@ nodes:
       initialpose: /initialpose                 # 購読：初期姿勢（EKF をリセットする）
       ekf_pose: /ekf_pose                       # 配信：推定（map → LiDAR）
       ekf_odom: /ekf_odom                       # 配信：推定（map → base と速度）
-      tf_ndt_update: /tf_ndt_update             # 配信：NDT で更新した直後の map → base（点群の時刻。録画と評価用）
   # RViz（ノードの中の名前は pcl_localization_ros2 の rviz/localization2.rviz に書いてある名前）
   rviz:
     enable: true
@@ -66,7 +65,6 @@ nodes:
       /velodyne_points: /velodyne_points        # 表示：点群
       /current_pose: /current_pose              # 表示：NDT の解
       /initial_map: /initial_map                # 表示：地図
-      /ekf/pose: /ekf/pose                      # 表示：EKFPose（配信するノードは無い）
       /initialpose: /initialpose                # 配信：2D Pose Estimate
       /goal_pose: /goal_pose                    # 配信：2D Goal Pose（使っていない）
       /clicked_point: /clicked_point            # 配信：Publish Point（使っていない）
