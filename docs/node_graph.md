@@ -34,8 +34,8 @@ flowchart LR
   ndt -->|"/ndt_pose"| ekf
   ekf -->|"/tf map→base_footprint"| ndt
 
-  ekf -->|"/ekf_pose"| matlab
-  ekf -->|"/localization/base_pose<br/>/localization/vlp16_pose<br/>/localization/vlp16_points"| matlab
+  ekf -->|"/tf map→base_footprint"| matlab
+  rsp -->|"/tf_static"| matlab
   ndt -->|"/localization_debug"| matlab
   laser -->|"/velodyne_points"| matlab
   bridge -->|"/wheelchair/odom"| matlab
@@ -50,6 +50,9 @@ flowchart LR
 
 - 時刻：Gazebo が配信する `/clock`（100 Hz）に、localization の全ノードが従います（`use_sim_time: true`）。図では省略しています。
 - 点群・オドメトリの stamp：sim time でそろっているので、そのまま使います（`stamp_mode: stamp`）。
+- MATLAB：点群は `/velodyne_points` をそのまま使い、`ros2tf` で `/tf`・`/tf_static` を溜めて、後輪間中心は最新の map → base、
+  LiDAR の姿勢は点群の stamp の時刻の map → velodyne を引きます（2026-10-26 から。それまでの `/localization/base_pose`・`vlp16_pose`・
+  `vlp16_points` はやめた）。
 - 通信：localization コンテナ、Gazebo コンテナ、MATLAB の 3 つとも、同じ Fast DDS プロファイル（`fastdds_localhost.xml`）で localhost だけで通信します。LAN 上の他の ROS 2 とはつながりません。
 
 ## 実機（`env:=red`・`blue`・`white`）
@@ -67,7 +70,7 @@ flowchart LR
     rviz["/rviz2"]
   end
 
-  user["/ekf_pose の利用者"]
+  user["MATLAB など"]
 
   lidar -->|"/velodyne_points"| ndt
   whill -->|"/Drp5_whill_&lt;色&gt;/whill_node/motor_speed_ts"| wodom
@@ -78,8 +81,9 @@ flowchart LR
 
   ndt -->|"/ndt_pose"| ekf
   ekf -->|"/tf map→base_link"| ndt
-  ekf -->|"/ekf_pose"| user
-  ekf -->|"/localization/base_pose<br/>/localization/vlp16_pose<br/>/localization/vlp16_points"| user
+  ekf -->|"/tf map→base_link、/ekf_pose"| user
+  stf -->|"/tf_static"| user
+  lidar -->|"/velodyne_points"| user
 
   lidar -->|"/velodyne_points"| rviz
   ndt -->|"/current_pose, /path, /initial_map"| rviz
@@ -128,14 +132,11 @@ sequenceDiagram
 | `/wheelchair/odom` | `nav_msgs/Odometry` | `gazebo_bridge` / `whill_odometry` | `odom_covariance`、MATLAB | `odom_covariance` 側は best effort（sensor data） | 50 Hz | 使うのは `twist.linear.x`（v）と `twist.angular.z`（omega） |
 | `/localization/odom` | `nav_msgs/Odometry` | `odom_covariance` | EKF | 配信は reliable、KeepLast(10)。EKF 側は best effort、KeepLast(50) | 50 Hz | v・omega に倍率（`odom_scale`）を掛け、twist の共分散に観測ノイズ R を入れたもの（EKF は `odom_covariance_source: message` で R に使う） |
 | `/ndt_pose` | `geometry_msgs/PoseWithCovarianceStamped` | NDT | EKF | reliable、KeepLast(10) | 約 10 Hz | NDT の解。map → LiDAR、stamp は点群の取得時刻 |
-| `/ekf_pose` | `geometry_msgs/PoseWithCovarianceStamped` | EKF | MATLAB | reliable、transient_local、KeepLast(1) | 50 Hz | EKF の推定。map → LiDAR、stamp は現在時刻 |
+| `/ekf_pose` | `geometry_msgs/PoseWithCovarianceStamped` | EKF | テスト走行（`drive_test.py`。範囲の監視） | reliable、transient_local、KeepLast(1) | 50 Hz | EKF の推定。map → LiDAR、stamp は現在時刻（`/tf` と同じ値） |
 | `/ekf_odom` | `nav_msgs/Odometry` | EKF | （なし） | reliable、KeepLast(10) | 50 Hz | map → base の姿勢と、base 座標での v・omega |
 | `/current_pose` | `geometry_msgs/PoseWithCovarianceStamped` | NDT（`pcl_pose` をリマップ） | RViz | reliable、transient_local、KeepLast(1) | 約 10 Hz | NDT の解。`pose_output_frame: "lidar"` なので map → LiDAR |
 | `/path` | `nav_msgs/Path` | NDT | RViz | reliable、transient_local、KeepLast(1) | 約 10 Hz | NDT の解（base）の軌跡 |
 | `/tf_ndt_update` | `tf2_msgs/TFMessage` | EKF（`publish_ndt_update_tf`） | RViz（launch が RViz の `/tf` を付け替える） | reliable、KeepLast(100) | NDT と同じ | NDT で更新した直後の map → base（点群の時刻の事後推定値）。stamp は点群の取得時刻 |
-| `/localization/base_pose` | `geometry_msgs/PoseWithCovarianceStamped` | EKF（`base_pose_rate`） | MATLAB 用 | reliable、KeepLast(1) | 50 Hz | 現在時刻まで予測した map → base（後輪の間の中心）。`publish_trigger` とは別のタイマー |
-| `/localization/vlp16_pose` | `geometry_msgs/PoseWithCovarianceStamped` | EKF（`publish_vlp16_pose`） | MATLAB 用 | reliable、KeepLast(10) | NDT と同じ | NDT で更新した直後の map → LiDAR（`/tf_ndt_update` と同じ状態）。stamp は点群の取得時刻 |
-| `/localization/vlp16_points` | `sensor_msgs/PointCloud2` | EKF（`publish_vlp16_points`） | MATLAB 用 | reliable、KeepLast(2) | NDT と同じ | `/localization/vlp16_pose` の直後に出す、同じ stamp の点群（中身は `/velodyne_points` のまま）。2 つの stamp が同じなら組にする（届く順は入れ替わることがある） |
 | `/initial_map` | `sensor_msgs/PointCloud2` | NDT | RViz | reliable、transient_local、KeepLast(1) | 起動時 1 回 | 読み込んだ PCD 地図 |
 | `/localization_debug` | `std_msgs/Float32MultiArray` | NDT | MATLAB | reliable、transient_local、KeepLast(1) | 約 10 Hz | [点数, align 時間 s, 収束, fitness, 初期値との角度差 deg] |
 | `/initialpose` | `geometry_msgs/PoseWithCovarianceStamped` | RViz（2D Pose Estimate） | NDT、EKF | system default | 手動 | NDT は初期姿勢を置き換え、EKF はリセットして次の NDT で初期化し直す |
@@ -144,10 +145,10 @@ sequenceDiagram
 
 | 変換 | 配信 | 使うノード |
 |---|---|---|
-| map → base（Gazebo：`base_footprint`、実機：`base_link`） | EKF（`/tf`。`publish_trigger` の値。`cloud` なら点群の時刻の予測値） | NDT（点群の取得時刻の値を初期値に使う） |
+| map → base（Gazebo：`base_footprint`、実機：`base_link`） | EKF（`/tf`。`predict_rate` 50 Hz の周期で、現在時刻まで予測した値） | NDT（点群の取得時刻の値を補間して初期値に使う）、MATLAB（最新の値を後輪間中心に、点群の取得時刻の値を点群の座標変換に使う） |
 | map → base（RViz 用） | EKF（`/tf_ndt_update`。NDT で更新した直後の値を点群の時刻で） | RViz（`/tf` を付け替えて読む。点群 `/velodyne_points` はこの値で map に直される） |
-| `base_footprint` → `base_link` → `velodyne_base_link` → `velodyne` | `robot_state_publisher`（URDF、Gazebo） | NDT・EKF（base → LiDAR の取付として読む） |
-| `base_link` → `velodyne`、`base_link` → `imu_link` | launch の `static_transform_publisher`（実機） | NDT・EKF（同上） |
+| `base_footprint` → `base_link` → `velodyne_base_link` → `velodyne` | `robot_state_publisher`（URDF、Gazebo） | NDT・EKF（base → LiDAR の取付として読む）、MATLAB |
+| `base_link` → `velodyne`、`base_link` → `imu_link` | launch の `static_transform_publisher`（実機） | NDT・EKF（同上）、MATLAB |
 
 `use_ekf:=false`（か `nodes.ekf_localizer.enable: false`）で起動したときは EKF が起動しないので、map → base は NDT が配信し、`/ndt_pose` を購読するノードはなくなります（RViz の `/tf` も付け替えません）。
 
