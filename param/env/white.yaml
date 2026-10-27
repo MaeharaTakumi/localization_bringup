@@ -102,7 +102,11 @@ parameters:
     initial_pose_qz: 0.0
     initial_pose_qw: 1.0
   # TF・ekf_pose は ekf.yaml の predict_rate（50 Hz）の周期で、現在時刻まで予測した値（2026-10-26 に publish_trigger をやめた）
-  ekf_localizer: {}
+  ekf_localizer:
+    # TF を周期（predict_rate 50 Hz）の刻みの stamp で、今より後の 2 刻みと今以前の 1 刻みを毎周期送る（送り直した刻みは
+    # 購読側で置き換わる）。NDT・MATLAB は点群が届いた時点でその stamp の TF を持っている（2026-10-27、dev_log.md の 72）
+    tf_future_steps: 2
+    tf_past_steps: 1
   cloud_stamp_corrector: {}
   # ---- オドメトリ（odom_covariance：ekf_localizer に渡す前に、倍率と観測ノイズ R を付ける）----
   #   R_v     = R_odom[0] + odom_noise_alpha[0]·v² + odom_noise_alpha[1]·ω² + (accel_noise_tau[0]·dv/dt)²

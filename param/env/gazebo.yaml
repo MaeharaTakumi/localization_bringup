@@ -108,6 +108,10 @@ parameters:
     # wheel_separation_multiplier: 1.085 で同じことを確かめた（Gazebo 側は変えない）。v は真値と一致
     odom_scale: [1.0, 0.922]
   ekf_localizer:
+    # TF を周期（predict_rate 50 Hz）の刻みの stamp で、今より後の 2 刻みと今以前の 1 刻みを毎周期送る（送り直した刻みは
+    # 購読側で置き換わる）。NDT・MATLAB は点群が届いた時点でその stamp の TF を持っている（2026-10-27、dev_log.md の 72）
+    tf_future_steps: 2
+    tf_past_steps: 1
     # TF・/ekf_pose は ekf.yaml の predict_rate（50 Hz）の周期の予測値。2026-10-12〜26 は publish_trigger: update
     # （NDT・オドメトリで更新するたびに、その時刻の事後推定値）だった（dev_log.md の 21・68）
     # R_ndt は ekf.yaml の値のまま（[1e-2, 1e-2, 1e-2, 0.03, 0.03, 1e-3]）。止まった状態で測った小さい R_ndt

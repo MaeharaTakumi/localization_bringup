@@ -103,6 +103,10 @@ parameters:
     initial_pose_qw: 1.0
   # TF・ekf_pose は ekf.yaml の predict_rate（50 Hz）の周期で、現在時刻まで予測した値（2026-10-26 に publish_trigger をやめた）
   ekf_localizer:
+    # TF を周期（predict_rate 50 Hz）の刻みの stamp で、今より後の 2 刻みと今以前の 1 刻みを毎周期送る（送り直した刻みは
+    # 購読側で置き換わる）。NDT・MATLAB は点群が届いた時点でその stamp の TF を持っている（2026-10-27、dev_log.md の 72）
+    tf_future_steps: 2
+    tf_past_steps: 1
     Q: [5.0e-2, 5.0e-2, 5.0e-3, 5.0e-2, 5.0e-2, 5.0e-2, 0.05, 10.0]
     R_ndt: [0.000208, 0.000155, 9.61e-05, 5.89e-05, 6.32e-05, 1.23e-05]
   cloud_stamp_corrector: {}
