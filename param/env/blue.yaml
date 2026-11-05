@@ -107,7 +107,8 @@ parameters:
     # 購読側で置き換わる）。NDT・MATLAB は点群が届いた時点でその stamp の TF を持っている（2026-10-27、dev_log.md の 72）
     tf_future_steps: 2
     tf_past_steps: 1
-    Q: [5.0e-2, 5.0e-2, 5.0e-3, 5.0e-2, 5.0e-2, 5.0e-2, 0.05, 10.0]
+    # 並びは [x, y, z, roll, pitch, yaw, v_xy, v_z, omega_roll, omega_pitch, omega_yaw]。v_z・omega_roll・omega_pitch は 0
+    Q: [5.0e-2, 5.0e-2, 5.0e-3, 5.0e-2, 5.0e-2, 5.0e-2, 0.05, 0.0, 0.0, 0.0, 10.0]
     R_ndt: [0.000208, 0.000155, 9.61e-05, 5.89e-05, 6.32e-05, 1.23e-05]
   cloud_stamp_corrector: {}
   # ---- オドメトリ（odom_covariance：ekf_localizer に渡す前に、倍率と観測ノイズ R を付ける）----
