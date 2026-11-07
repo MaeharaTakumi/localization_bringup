@@ -107,8 +107,11 @@ parameters:
     # 購読側で置き換わる）。NDT・MATLAB は点群が届いた時点でその stamp の TF を持っている（2026-10-27、dev_log.md の 72）
     tf_future_steps: 2
     tf_past_steps: 1
-    # 並びは [x, y, z, roll, pitch, yaw, v_xy, v_z, omega_roll, omega_pitch, omega_yaw]。v_z・omega_roll・omega_pitch は 0
-    Q: [5.0e-2, 5.0e-2, 5.0e-3, 5.0e-2, 5.0e-2, 5.0e-2, 0.05, 0.0, 0.0, 0.0, 10.0]
+    # 並びは [x, y, z, roll, pitch, yaw, v_xy, v_z, omega_roll, omega_pitch, omega_yaw]。
+    # omega_roll・omega_pitch は 0.1（実機は傾きが動く。blue の録画で点群の時刻の予測値 − NDT の解の roll・pitch が最も小さい。
+    # 調整に使っていない blue_spin5 で roll −9 %・pitch −5 %）。v_z は 0（大きくすると z が悪くなった）。Gazebo は 0（2026-11-07、dev_log.md の 76）
+    Q: [5.0e-2, 5.0e-2, 5.0e-3, 5.0e-2, 5.0e-2, 5.0e-2, 0.05, 0.0, 0.1, 0.1, 10.0]
+    P_init: [2.0e-1, 2.0e-1, 2.0e-1, 0.01, 0.01, 0.01, 0.01, 0.0, 0.01, 0.01, 0.01]   # ekf.yaml の値に omega_roll・omega_pitch 0.01
     R_ndt: [0.000208, 0.000155, 9.61e-05, 5.89e-05, 6.32e-05, 1.23e-05]
   cloud_stamp_corrector: {}
   # ---- オドメトリ（odom_covariance：ekf_localizer に渡す前に、倍率と観測ノイズ R を付ける）----
