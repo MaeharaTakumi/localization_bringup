@@ -51,22 +51,22 @@ robot_localization（2 段 EKF）に切り替えて比べる機能（`estimator:
 Gazebo の比較で ekf_localizer と同じか、その場の回転・曲線では ekf_localizer のほうが良かったためです。
 コードは廃止する前の最後の commit（`robot_localization` ブランチの 23767ee）に残っています。
 
-## オドメトリの観測ノイズ（`odom_covariance`）
+## オドメトリの倍率と観測ノイズ
 
-オドメトリは `odom_covariance` を通して `/localization/odom` に中継され、v・omega に倍率（`odom_scale`）が掛かり、
-twist の共分散に速さに応じた観測ノイズ R が入る（Nav2 AMCL の `odom_alpha` と同じ考え方）。パラメータは
-環境ファイルの `parameters.odom_covariance`（`gazebo.yaml`・`red.yaml`・`blue.yaml`・`white.yaml` に全部書いてある。
-書かなければ `scripts/odom_covariance.py` の既定値。2026-10-15 に `param/odom_covariance.yaml` から移した）。
+オドメトリは `odom_covariance` を通して `/localization/odom` に中継され、v・omega に倍率（`odom_scale`）が掛かり、時刻が決まる。
+パラメータは環境ファイルの `parameters.odom_covariance`（書かなければ `scripts/odom_covariance.py` の既定値）。
+
+観測ノイズ R は `ekf_localizer` が速さと加速度から計算する（2026-11-09 に `odom_covariance` から移した。メッセージの共分散は使わない）。
+パラメータは `ekf_localizer` の `param/ekf.yaml`（全環境で実機 blue の値。環境ごとに変えるなら `parameters.ekf_localizer` に書く。
+`parameters.odom_covariance` に R の項目が残っていると launch はエラーで止まる）。
 
 ```
-R_v     = R_odom[0] + odom_noise_alpha[0]·v² + odom_noise_alpha[1]·ω²
-R_omega = R_odom[1] + odom_noise_alpha[2]·v² + odom_noise_alpha[3]·ω²
+R_v     = R_odom[0] + odom_noise_alpha[0]·v² + odom_noise_alpha[1]·ω² + (accel_noise_tau[0]·dv/dt)²
+R_omega = R_odom[1] + odom_noise_alpha[2]·v² + odom_noise_alpha[3]·ω² + (accel_noise_tau[1]·dω/dt)²
 ```
 
-- `ekf_localizer` は launch が `odom_covariance_source: message` にして `[0]`・`[35]` を R に使う。
 - 時刻（`stamp_mode`）は launch が環境ファイルの `stamp_mode` をそのまま入れる。
-- `odom_noise_alpha` がすべて 0 なら、固定の `R_odom`（`ekf_localizer` の `R_odom` と同じ値）で今までと同じ。
-- `accel_noise_tau` [τ_v, τ_ω] で、加速度に応じた分 (τ·dv/dt)²・(τ·dω/dt)² も R に足せる（既定 0）。
+- `odom_noise_alpha`（Nav2 AMCL の `odom_alpha` と同じ考え方）と `accel_noise_tau` がすべて 0 なら、固定の `R_odom`。
 - `odom_scale` [v, omega] をオドメトリの v・omega に掛ける（実効的な車輪間隔・半径が設定と違う分の補正。既定 [1, 1]）。
   Gazebo は omega 0.922（回転中、オドメトリの omega が真値の 1.08〜1.09 倍。実効的な車輪間隔 0.532〜0.535 m）。
 - 速さ・加速度に応じた R は効かなかった（加速度に応じた R は、速度が変わる間オドメトリを信じなくなり悪化）。

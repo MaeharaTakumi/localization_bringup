@@ -17,7 +17,7 @@ flowchart LR
 
   subgraph LOC["localization コンテナ（localization_bringup）"]
     ndt["/pcl_localization<br/>NDT"]
-    ocov["/odom_covariance<br/>倍率・観測ノイズ R"]
+    ocov["/odom_covariance<br/>倍率・時刻"]
     ekf["/ekf_localizer<br/>EKF"]
     rviz["/rviz2"]
   end
@@ -68,7 +68,7 @@ flowchart LR
     wodom["/whill_odometry"]
     stf["static_transform_publisher<br/>base_link→velodyne<br/>base_link→imu_link"]
     ndt["/pcl_localization<br/>NDT"]
-    ocov["/odom_covariance<br/>倍率・観測ノイズ R"]
+    ocov["/odom_covariance<br/>倍率・時刻"]
     ekf["/ekf_localizer<br/>EKF"]
     rviz["/rviz2"]
   end
@@ -134,7 +134,7 @@ sequenceDiagram
 |---|---|---|---|---|---|---|
 | `/velodyne_points` | `sensor_msgs/PointCloud2` | Gazebo / LiDAR PC | NDT、MATLAB | NDT 側は best effort、KeepLast(1) | 10 Hz（Gazebo）、20 Hz（実機） | 点群 |
 | `/wheelchair/odom` | `nav_msgs/Odometry` | `gazebo_bridge` / `whill_odometry` | `odom_covariance`、MATLAB | `odom_covariance` 側は best effort（sensor data） | 50 Hz | 使うのは `twist.linear.x`（v）と `twist.angular.z`（omega） |
-| `/localization/odom` | `nav_msgs/Odometry` | `odom_covariance` | EKF | 配信は reliable、KeepLast(10)。EKF 側は best effort、KeepLast(50) | 50 Hz | v・omega に倍率（`odom_scale`）を掛け、twist の共分散に観測ノイズ R を入れたもの（EKF は `odom_covariance_source: message` で R に使う） |
+| `/localization/odom` | `nav_msgs/Odometry` | `odom_covariance` | EKF | 配信は reliable、KeepLast(10)。EKF 側は best effort、KeepLast(50) | 50 Hz | v・omega に倍率（`odom_scale`）を掛け、`stamp_mode` で stamp を決めたもの（twist の共分散は使わない。観測ノイズ R は EKF が計算する） |
 | `/ndt_pose` | `geometry_msgs/PoseWithCovarianceStamped` | NDT | EKF | reliable、KeepLast(10) | 約 10 Hz | NDT の解。map → LiDAR、stamp は点群の取得時刻 |
 | `/ekf_pose` | `geometry_msgs/PoseWithCovarianceStamped` | EKF | テスト走行（`drive_test.py`。実機の走行の監視） | reliable、transient_local、KeepLast(1) | 50 Hz | EKF の推定。map → LiDAR、stamp は現在時刻（`/tf` と同じ値） |
 | `/ekf_odom` | `nav_msgs/Odometry` | EKF | （なし） | reliable、KeepLast(10) | 50 Hz | map → base の姿勢と、base 座標での v・omega |

@@ -172,6 +172,11 @@ def _launch_setup(context):
             f'stamp_mode "{stamp_mode}" is not supported in {path}. Available: {", ".join(STAMP_MODES)}')
     clock_threshold = {'auto_threshold': float(env.get('clock_offset_threshold', 0.1))}
     overrides = env.get('parameters') or {}
+    for old in ('R_odom', 'odom_noise_alpha', 'accel_noise_tau', 'R_odom_other'):
+        if old in (overrides.get('odom_covariance') or {}):
+            raise RuntimeError(
+                f'parameters.odom_covariance.{old} in {path} was moved to ekf_localizer on 2026-11-09 '
+                '(R_odom, odom_noise_alpha, accel_noise_tau; R_odom_other was removed)')
     sim_time = {'use_sim_time': use_sim_time}
 
     def node_params(name):
@@ -260,7 +265,7 @@ def _launch_setup(context):
                 transition_id=lifecycle_msgs.msg.Transition.TRANSITION_CONFIGURE)),
         ]
 
-    # ---- オドメトリの共分散・倍率・時刻（stamp_mode。ekf_localizer が使う）----
+    # ---- オドメトリの倍率・時刻（stamp_mode。観測ノイズ R は ekf_localizer が計算する）----
     if 'odom_covariance' in enabled:
         actions.append(Node(
             package='localization_bringup', executable='odom_covariance.py',
@@ -280,11 +285,9 @@ def _launch_setup(context):
                 os.path.join(get_package_share_directory('ekf_localizer'), 'param', 'ekf.yaml'),
                 _scoped(
                     'ekf_localizer', node_params('ekf_localizer'),
-                    # 購読するトピックはパラメータなので、中の名前にして remap する。
-                    # オドメトリの R は odom_covariance が付けた共分散を使う
+                    # 購読するトピックはパラメータなので、中の名前にして remap する
                     {'base_frame_id': base_frame_id, 'lidar_frame_id': lidar_frame_id,
-                     'ndt_pose_topic': 'ndt_pose', 'odom_topic': 'odom', 'initialpose_topic': 'initialpose',
-                     'odom_covariance_source': 'message'},
+                     'ndt_pose_topic': 'ndt_pose', 'odom_topic': 'odom', 'initialpose_topic': 'initialpose'},
                     sim_time)],
             remappings=remappings('ekf_localizer')))
 
