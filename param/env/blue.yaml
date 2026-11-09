@@ -102,7 +102,7 @@ parameters:
     # omega_roll・omega_pitch は 0.1（実機は傾きが動く。blue の録画で点群の時刻の予測値 − NDT の解の roll・pitch が最も小さい。
     # 調整に使っていない blue_spin5 で roll −9 %・pitch −5 %）。v_z は 0（大きくすると z が悪くなった）。Gazebo は 0（2026-11-07、dev_log.md の 76）
     Q: [5.0e-2, 5.0e-2, 5.0e-3, 5.0e-2, 5.0e-2, 5.0e-2, 0.05, 0.0, 0.1, 0.1, 10.0]
-    P_init: [2.0e-1, 2.0e-1, 2.0e-1, 0.01, 0.01, 0.01, 0.01, 0.0, 0.01, 0.01, 0.01]   # ekf.yaml の値に omega_roll・omega_pitch 0.01
+    P_init: [2.0e-1, 2.0e-1, 2.0e-1, 0.01, 0.01, 0.01, 0.01, 0.0, 0.01, 0.01, 0.01]
     R_ndt: [0.000208, 0.000155, 9.61e-05, 5.89e-05, 6.32e-05, 1.23e-05]
   # ---- オドメトリ（odom_covariance：ekf_localizer に渡す前に、倍率を掛けて時刻を決める）----
   #   観測ノイズ R は ekf_localizer が計算する（ekf.yaml の R_odom・odom_noise_alpha・accel_noise_tau。全環境で同じ。2026-11-09）。
