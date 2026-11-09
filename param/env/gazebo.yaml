@@ -19,12 +19,6 @@ nodes:
     topics:
       joint_states: /wheelchair/joint_states    # 購読：車輪の角速度
       odom: /localization/wheel_odom            # 配信：オドメトリ
-  # 点群の stamp を直す。stamp_mode が receipt・auto のときだけ起動する（enable は書かない）。
-  # 起動するときは、ほかのノードで input と同じ名前のトピック（点群）を output に付け替える
-  cloud_stamp_corrector:
-    topics:
-      input: /velodyne_points                   # 購読：点群
-      output: /localization/points              # 配信：stamp を直した点群
   # NDT
   pcl_localization:
     enable: true
@@ -38,7 +32,6 @@ nodes:
       path: /path                               # 配信：NDT の解の軌跡
       initial_map: /initial_map                 # 配信：読み込んだ地図
       localization_debug: /localization_debug   # 配信：[点数, align 時間, 収束, fitness, angle_diff]
-      tf_rviz: /tf_rviz                         # 配信：publish_rviz_tf: true のとき（launch は false にする）
   # オドメトリに倍率・観測ノイズ R・時刻を付けて EKF に渡す
   odom_covariance:
     enable: true
@@ -53,7 +46,6 @@ nodes:
     topics:
       ndt_pose: /ndt_pose                       # 購読：NDT の解
       odom: /localization/odom                  # 購読：オドメトリ（odom_covariance）
-      velodyne_points: /velodyne_points         # 購読：点群（time_source: receipt のときだけ。受信した時刻を NDT の観測の時刻にする）
       initialpose: /initialpose                 # 購読：初期姿勢（EKF をリセットする）
       ekf_pose: /ekf_pose                       # 配信：推定（map → LiDAR）
       ekf_odom: /ekf_odom                       # 配信：推定（map → base と速度）

@@ -18,16 +18,9 @@ nodes:
     topics:
       motor_speed: /Drp5_whill_red/whill_node/motor_speed_ts   # 購読：WHILL の左右輪の速度（ラズパイのホスト名 Drp5_whill_red）
       /wheelchair/odom: /wheelchair/odom        # 配信：オドメトリ（この PC の時刻）
-      /wheelchair/accel: /wheelchair/accel      # 配信：加速度
   # 車輪の角速度（JointState）からのオドメトリ（Gazebo で試す用。gazebo.yaml を参照）
   joint_state_odometry:
     enable: false
-  # 点群の stamp を直す。stamp_mode が receipt・auto のときだけ起動する（enable は書かない）。
-  # 起動するときは、ほかのノードで input と同じ名前のトピック（点群）を output に付け替える
-  cloud_stamp_corrector:
-    topics:
-      input: /velodyne_points                   # 購読：点群
-      output: /localization/points              # 配信：stamp を直した点群
   # NDT
   pcl_localization:
     enable: true
@@ -41,7 +34,6 @@ nodes:
       path: /path                               # 配信：NDT の解の軌跡
       initial_map: /initial_map                 # 配信：読み込んだ地図
       localization_debug: /localization_debug   # 配信：[点数, align 時間, 収束, fitness, angle_diff]
-      tf_rviz: /tf_rviz                         # 配信：publish_rviz_tf: true のとき（launch は false にする）
   # オドメトリに倍率・観測ノイズ R・時刻を付けて EKF に渡す
   odom_covariance:
     enable: true
@@ -54,7 +46,6 @@ nodes:
     topics:
       ndt_pose: /ndt_pose                       # 購読：NDT の解
       odom: /localization/odom                  # 購読：オドメトリ（odom_covariance）
-      velodyne_points: /velodyne_points         # 購読：点群（time_source: receipt のときだけ。受信した時刻を NDT の観測の時刻にする）
       initialpose: /initialpose                 # 購読：初期姿勢（EKF をリセットする）
       ekf_pose: /ekf_pose                       # 配信：推定（map → LiDAR）
       ekf_odom: /ekf_odom                       # 配信：推定（map → base と速度）
@@ -72,7 +63,7 @@ nodes:
 base_frame_id: base_link          # EKF の状態・TF（map -> base_frame_id）の基準
 lidar_frame_id: velodyne          # 点群のフレーム
 
-# 点群とオドメトリの時刻の決め方（点群は cloud_stamp_corrector、オドメトリは odom_covariance が行う。両方そろえる）
+# EKF の計算に使う、点群とオドメトリの時刻の決め方（点群は NDT、オドメトリは odom_covariance が行う。両方そろえる。点群のトピック自体の stamp は変えない）
 #   stamp  : stamp をそのまま使う（時刻同期済み。今の実機はこれ）
 #   receipt: この PC で受信した時刻にする（時計が同期していない環境用）
 #   auto   : |受信した時刻 − stamp| が clock_offset_threshold（既定 0.1 s）以上なら受信した時刻、小さければ stamp
@@ -107,7 +98,6 @@ parameters:
     # 購読側で置き換わる）。NDT・MATLAB は点群が届いた時点でその stamp の TF を持っている（2026-10-27、dev_log.md の 72）
     tf_future_steps: 2
     tf_past_steps: 1
-  cloud_stamp_corrector: {}
   # ---- オドメトリ（odom_covariance：ekf_localizer に渡す前に、倍率と観測ノイズ R を付ける）----
   #   R_v     = R_odom[0] + odom_noise_alpha[0]·v² + odom_noise_alpha[1]·ω² + (accel_noise_tau[0]·dv/dt)²
   #   R_omega = R_odom[1] + odom_noise_alpha[2]·v² + odom_noise_alpha[3]·ω² + (accel_noise_tau[1]·dω/dt)²

@@ -1,11 +1,9 @@
 """NDT（pcl_localization_ros2）と EKF（ekf_localizer）を環境ごとの設定で起動する.
 
 起動するノードと各ノードのトピックは、環境ファイルの nodes.<ノード名> に書く：
-  enable：起動するか（cloud_stamp_corrector は書かない。stamp_mode が receipt・auto のときだけ起動する）
+  enable：起動するか
   topics：ノードの中の名前: 実際の名前。そのまま remap に渡す（つなぐときは配信側と購読側を同じ名前にする）
-止めたノードの出力は、録画や別の PC から来るものとして、つなぎ方は変えない。例外は 2 つ：
-  - ekf_localizer を起動しないときは NDT が TF を出し、RViz の /tf も付け替えない
-  - cloud_stamp_corrector を起動するときは、ほかのノードで、その input と同じ名前のトピックを output に付け替える
+止めたノードの出力は、録画や別の PC から来るものとして、つなぎ方は変えない。例外は、ekf_localizer を起動しないときは NDT が TF を出すこと。
 
   ros2 launch localization_bringup localization.launch.py env:=gazebo
   ros2 launch localization_bringup localization.launch.py map_path:=/path/to/map.pcd          # 実機の車椅子 red（既定）
@@ -43,13 +41,15 @@ from launch_ros.events.lifecycle import ChangeState
 import lifecycle_msgs.msg
 import yaml
 
-# 環境ファイルの stamp_mode（点群とオドメトリの時刻の決め方）。odom_covariance の stamp_mode・cloud_stamp_corrector の mode にそのまま渡す
-#   stamp  ：stamp をそのまま使う（時刻同期済み・Gazebo。cloud_stamp_corrector は起動しない）
+# 環境ファイルの stamp_mode（EKF の計算に使う、点群とオドメトリの時刻の決め方）。点群のトピック自体の stamp は変えない。
+# NDT の scan_time_source（/ndt_pose の stamp と TF の初期値を引く時刻）と odom_covariance の stamp_mode（/localization/odom の stamp）にする
+#   stamp  ：stamp をそのまま使う（時刻同期済み・Gazebo）
 #   receipt：受信した時刻にする
 #   auto   ：|受信した時刻 − stamp| が clock_offset_threshold（既定 0.1 s）以上なら受信した時刻、小さければ stamp（1 つずつ判断する）
 STAMP_MODES = ('stamp', 'receipt', 'auto')
+SCAN_TIME_SOURCE = {'stamp': 'message', 'receipt': 'receipt', 'auto': 'auto'}
 # 環境ファイルの nodes に書くノード
-NODES = ('whill_odometry', 'joint_state_odometry', 'cloud_stamp_corrector', 'pcl_localization',
+NODES = ('whill_odometry', 'joint_state_odometry', 'pcl_localization',
          'odom_covariance', 'ekf_localizer', 'rviz')
 # 2026-10-22 に nodes に移した環境ファイルの項目
 MOVED_TO_NODES = {
@@ -131,7 +131,7 @@ def _arg_bool(context, name):
     return None if value == '' else value == 'true'
 
 
-def _load_nodes(env, path, stamp_mode):
+def _load_nodes(env, path):
     """環境ファイルの nodes から、(起動するノードの集合, ノードごとのトピックの remap の辞書) を返す."""
     nodes = _require(env, path, 'nodes')
     unknown = sorted(set(nodes) - set(NODES))
@@ -143,14 +143,7 @@ def _load_nodes(env, path, stamp_mode):
         node = nodes.get(name)
         if not isinstance(node, dict):
             raise RuntimeError(f'"nodes.{name}" is missing in {path} (write enable and topics under it)')
-        if name == 'cloud_stamp_corrector':
-            if 'enable' in node:
-                raise RuntimeError(
-                    f'nodes.cloud_stamp_corrector.enable in {path} is not used: '
-                    'it runs only when stamp_mode is receipt or auto')
-            if stamp_mode != 'stamp':
-                enabled.add(name)
-        elif _require(node, f'{path} (nodes.{name})', 'enable'):
+        if _require(node, f'{path} (nodes.{name})', 'enable'):
             enabled.add(name)
         topics[name] = dict(node.get('topics') or {})
     return enabled, topics
@@ -184,21 +177,12 @@ def _launch_setup(context):
     def node_params(name):
         return overrides.get(name) or {}
 
-    enabled, topics = _load_nodes(env, path, stamp_mode)
+    enabled, topics = _load_nodes(env, path)
     # launch 引数は環境ファイルより優先（use_ekf は odom_covariance も一緒に）
     for name, value in (('ekf_localizer', use_ekf), ('odom_covariance', use_ekf), ('rviz', use_rviz)):
         if value is not None:
             (enabled.add if value else enabled.discard)(name)
     use_ekf = 'ekf_localizer' in enabled
-
-    # cloud_stamp_corrector を起動するときは、ほかのノードの点群の入力（input と同じ名前）を output に付け替える
-    if 'cloud_stamp_corrector' in enabled:
-        cloud = topics['cloud_stamp_corrector']
-        where = f'{path} (nodes.cloud_stamp_corrector.topics)'
-        cloud_in, cloud_out = _require(cloud, where, 'input'), _require(cloud, where, 'output')
-        for name in NODES:
-            if name != 'cloud_stamp_corrector':
-                topics[name] = {k: cloud_out if v == cloud_in else v for k, v in topics[name].items()}
 
     def remappings(name):
         return list(topics[name].items())
@@ -242,22 +226,13 @@ def _launch_setup(context):
                 '--frame-id', tf['parent'], '--child-frame-id', tf['child']],
             parameters=[sim_time]))
 
-    # ---- 点群の stamp（stamp_mode が receipt・auto のとき、受信した時刻にする・ずれていたら受信した時刻にする）----
-    if 'cloud_stamp_corrector' in enabled:
-        actions.append(Node(
-            package='pcl_localization_ros2', executable='cloud_stamp_corrector',
-            name='cloud_stamp_corrector', output='screen',
-            parameters=[_scoped('cloud_stamp_corrector', node_params('cloud_stamp_corrector'),
-                                {'mode': stamp_mode}, clock_threshold, sim_time)],
-            remappings=remappings('cloud_stamp_corrector')))
-
     # ---- NDT ----
     if 'pcl_localization' in enabled:
         ndt_params = {
             'base_frame_id': base_frame_id,
-            # 点群の stamp は cloud_stamp_corrector で直してあるので、そのまま使う
-            'scan_time_source': 'message',
-            'publish_rviz_tf': False,
+            # /ndt_pose の stamp と TF の初期値を引く時刻（点群のトピック自体の stamp は変えない）
+            'scan_time_source': SCAN_TIME_SOURCE[stamp_mode],
+            'scan_time_auto_threshold': clock_threshold['auto_threshold'],
             # EKF と起動するときは TF を EKF に任せ、初期値を EKF の TF から取る
             'publish_tf': not use_ekf,
             'use_tf_init_guess': use_ekf,
@@ -309,7 +284,7 @@ def _launch_setup(context):
                     # オドメトリの R は odom_covariance が付けた共分散を使う
                     {'base_frame_id': base_frame_id, 'lidar_frame_id': lidar_frame_id,
                      'ndt_pose_topic': 'ndt_pose', 'odom_topic': 'odom', 'initialpose_topic': 'initialpose',
-                     'points_topic': 'velodyne_points', 'odom_covariance_source': 'message'},
+                     'odom_covariance_source': 'message'},
                     sim_time)],
             remappings=remappings('ekf_localizer')))
 

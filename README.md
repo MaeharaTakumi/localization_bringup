@@ -20,9 +20,9 @@ ros2 launch localization_bringup localization.launch.py env:=white map_path:=/pa
 ## 構成
 
 ```
-点群 ─▶ cloud_stamp_corrector ─▶ pcl_localization (NDT) ─▶ /ndt_pose ─▶ ekf_localizer ◀─ odom_covariance ◀─ オドメトリ
-          （stamp_mode が stamp       ▲                                      │      （倍率・観測ノイズ R・時刻）
-           でないときだけ起動）       └── TF map→LiDAR（点群の取得時刻）◀─────┘ TF map→base, /ekf_pose
+点群 ─▶ pcl_localization (NDT) ─▶ /ndt_pose ─▶ ekf_localizer ◀─ odom_covariance ◀─ オドメトリ
+              ▲                                      │      （倍率・観測ノイズ R・時刻）
+              └── TF map→LiDAR（点群の時刻）◀────────┘ TF map→base, /ekf_pose
 ```
 
 ## 環境を追加する
@@ -33,10 +33,10 @@ ros2 launch localization_bringup localization.launch.py env:=white map_path:=/pa
 | 項目 | 内容 |
 |---|---|
 | `use_sim_time` | Gazebo なら `true` |
-| `nodes.<ノード名>.enable` | ノードを起動するか（`whill_odometry`・`joint_state_odometry`・`pcl_localization`・`odom_covariance`・`ekf_localizer`・`rviz`。全部書く）。`cloud_stamp_corrector` は書かない（`stamp_mode` が `receipt`・`auto` のときだけ起動）。止めたノードの出力は録画や別の PC から来るものとして、つなぎ方は変えない（EKF を起動しないときは NDT が TF を配信する） |
-| `nodes.<ノード名>.topics` | ノードが購読・配信するトピック（ノードの中の名前: 実際の名前）。launch はそのまま remap に渡すので、つなぐときは配信側と購読側を同じ名前にする。書かなかった名前はノードの中の名前のまま。`cloud_stamp_corrector` を起動するときは、ほかのノードで、その `input` と同じ名前のトピックを `output` に付け替える。`/tf`・`/tf_static`・`/clock` は変えない。2026-10-22 に `topics`・`launch_odometry`・`joint_state_odometry` から移した（残っていると launch がエラーで止まる） |
+| `nodes.<ノード名>.enable` | ノードを起動するか（`whill_odometry`・`joint_state_odometry`・`pcl_localization`・`odom_covariance`・`ekf_localizer`・`rviz`。全部書く）。止めたノードの出力は録画や別の PC から来るものとして、つなぎ方は変えない（EKF を起動しないときは NDT が TF を配信する） |
+| `nodes.<ノード名>.topics` | ノードが購読・配信するトピック（ノードの中の名前: 実際の名前）。launch はそのまま remap に渡すので、つなぐときは配信側と購読側を同じ名前にする。書かなかった名前はノードの中の名前のまま。`/tf`・`/tf_static`・`/clock` は変えない。2026-10-22 に `topics`・`launch_odometry`・`joint_state_odometry` から移した（残っていると launch がエラーで止まる） |
 | `base_frame_id` / `lidar_frame_id` | EKF の状態・TF の基準フレームと、点群のフレーム |
-| `stamp_mode` | 点群とオドメトリの時刻の決め方（両方そろえる）。`stamp`（既定）：stamp をそのまま使う / `receipt`：この PC で受信した時刻にする / `auto`：\|受信した時刻 − stamp\| が `clock_offset_threshold`（既定 0.1 s）以上なら受信した時刻、小さければ stamp（1 つずつ判断する）。点群は `cloud_stamp_corrector`（`stamp` 以外のとき起動。`mode` に同じ値）、オドメトリは `odom_covariance`（`stamp_mode` に同じ値）が行う。2026-10-22 に `clock_synced`（`true` / `false` / `auto`）から名前を変えた |
+| `stamp_mode` | EKF の計算に使う、点群とオドメトリの時刻の決め方（両方そろえる。点群のトピック自体の stamp は変えない）。`stamp`（既定）：stamp をそのまま使う / `receipt`：この PC で受信した時刻にする / `auto`：\|受信した時刻 − stamp\| が `clock_offset_threshold`（既定 0.1 s）以上なら受信した時刻、小さければ stamp（1 つずつ判断する）。点群は NDT（`scan_time_source`。`stamp` は `message`、ほかは同じ名前。`/ndt_pose` の stamp と TF の初期値を引く時刻）、オドメトリは `odom_covariance`（`stamp_mode` に同じ値。`/localization/odom` の stamp）が行う。2026-11-09 に `cloud_stamp_corrector` をやめた。2026-10-22 に `clock_synced`（`true` / `false` / `auto`）から名前を変えた |
 | `static_tfs` | launch が配信する静的 TF。URDF などが配信するものは書かない |
 | `parameters.<ノード名>` | ノードのパラメータの上書き（地図・初期姿勢など）。`whill_odometry`・`joint_state_odometry` も上書きできる。launch がノード名の節の一時ファイルにして渡すので、各パッケージの yaml のノード名の節より優先される |
 

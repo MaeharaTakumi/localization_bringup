@@ -3,7 +3,7 @@
 
   odom → odom_out（twist の v・ω に odom_scale を掛け、twist.covariance を置き換え、stamp_mode で header.stamp を決める。他はそのまま）
 
-stamp_mode（localization_bringup の環境ファイルの stamp_mode がそのまま入る。点群の cloud_stamp_corrector と同じ決め方）：
+stamp_mode（localization_bringup の環境ファイルの stamp_mode がそのまま入る。NDT の scan_time_source と同じ決め方）：
   stamp  ：stamp をそのまま使う
   receipt：このノードが受信した時刻にする
   auto   ：|受信した時刻 − stamp| が auto_threshold 以上なら受信した時刻、小さければ stamp（1 つずつ判断する）
