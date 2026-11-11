@@ -3,16 +3,21 @@
 <package format="3">
   <name>localization_bringup</name>
   <version>0.1.0</version>
-  <description>Launch NDT localization (pcl_localization_ros2) and EKF (ekf_localizer) with per-environment settings</description>
+  <description>Launch NDT localization (pcl_localization_ros2) or lidarslam (scanmatcher, graph_based_slam) and EKF (ekf_localizer) with per-environment settings</description>
   <maintainer email="g2581059@tcu.ac.jp">maehara</maintainer>
   <license>BSD-2-Clause</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <exec_depend>pcl_localization_ros2</exec_depend>
+  <exec_depend>scanmatcher</exec_depend>
+  <exec_depend>graph_based_slam</exec_depend>
+  <exec_depend>lidarslam</exec_depend>
   <exec_depend>ekf_localizer</exec_depend>
   <exec_depend>whill_odometry</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>rviz2</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>

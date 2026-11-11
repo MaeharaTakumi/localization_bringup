@@ -1,17 +1,25 @@
-"""NDT（pcl_localization_ros2）と EKF（ekf_localizer）を環境ごとの設定で起動する.
+"""NDT（pcl_localization_ros2）か lidarslam（scan_matcher・graph_based_slam）と、EKF（ekf_localizer）を環境ごとの設定で起動する.
 
   ros2 launch localization_bringup localization.launch.py env:=gazebo
   ros2 launch localization_bringup localization.launch.py env:=blue map_path:=/path/to/map.pcd
   ros2 launch localization_bringup localization.launch.py                 # env なし：NDT と EKF をコードの既定値で起動するだけ
+  ros2 launch localization_bringup lidarslam.launch.py env:=blue          # SLAM（matcher:=lidarslam を付けてこのファイルを読む）
 
 環境は param/<名前>/ のフォルダ（env:=<名前>。フォルダのパスでもよい。追加したら colcon build）：
   env.yaml          launch が読む：use_sim_time、起動するノード（nodes.<ノード名>: true / false）、静的 TF（static_tfs）
   <ノード名>.yaml   そのノードのパラメータ（ROS のパラメータファイル。ekf_localizer・pcl_localization・whill_odometry）
+  lidarslam.yaml    lidarslam の scan_matcher・graph_based_slam のパラメータ（matcher:=lidarslam のとき）
 yaml が無いノード、yaml に書いていない項目は、そのノードのコードの既定値になる。env を指定しなければ、どのノードにも yaml を渡さない。
 
-launch が入れるのは use_sim_time（全ノード）と、NDT の publish_tf・use_tf_init_guess（EKF を起動するときは false・true）、
-map_path（launch 引数を付けたとき）だけ。トピックは各ノードの名前のままでつながる。付け替えるのは ekf_localizer の odom（→ /wheelchair/odom）と
-NDT の pcl_pose（→ /current_pose。RViz と、研究室の MATLAB（whill_common_matlab の CR）の実機モードが購読する）だけ。
+matcher（ndt / lidarslam）：点群を合わせるノード。lidarslam のときは pcl_localization の代わりに scan_matcher と graph_based_slam を起動する
+（env.yaml の nodes.pcl_localization は見ない）。EKF は scan_matcher の slam_pose（NDT の ndt_pose と同じ型）を購読する。
+
+launch が入れるのは use_sim_time（全ノード）と、NDT・scan_matcher の publish_tf（いつも false）・use_tf_init_guess（EKF を起動するときは true）、
+map_path（launch 引数を付けたとき）だけ。TF map -> base は EKF が出す。EKF を起動しないときは pose_to_tf（このパッケージ）が
+NDT・scan_matcher の解を取付で base に直して出す（フレームの名前は ekf_localizer.yaml の値）。
+トピックは各ノードの名前のままでつながる。付け替えるのは ekf_localizer の odom（→ /wheelchair/odom）・ndt_pose（lidarslam のとき → /slam_pose）、
+NDT の pcl_pose（→ /current_pose。RViz と、研究室の MATLAB（whill_common_matlab の CR）の実機モードが購読する）、
+scan_matcher の input_cloud（→ /velodyne_points）、pose_to_tf の pose（→ /ndt_pose か /slam_pose）だけ。
 """
 
 import atexit
@@ -38,6 +46,10 @@ import yaml
 # env.yaml の nodes に書けるノードと、env を指定しないとき（nodes を書かないとき）に起動するもの
 NODES = ('whill_odometry', 'pcl_localization', 'ekf_localizer', 'rviz')
 DEFAULT_NODES = ('pcl_localization', 'ekf_localizer')
+MATCHERS = ('ndt', 'lidarslam')
+# matcher ごとの、解のトピックと RViz の設定（パッケージ、ファイル）
+POSE_TOPIC = {'ndt': '/ndt_pose', 'lidarslam': '/slam_pose'}
+RVIZ = {'ndt': ('pcl_localization_ros2', 'localization2.rviz'), 'lidarslam': ('lidarslam', 'mapping.rviz')}
 
 
 def _param_dir():
@@ -64,9 +76,9 @@ def _load_yaml(path):
         return yaml.safe_load(f) or {}
 
 
-def _node_params(env_dir, name):
-    """param/<env>/<name>.yaml のパラメータ（ノード名か /** の節の ros__parameters）と、そのパス。無ければ ({}, None)."""
-    path = os.path.join(env_dir, f'{name}.yaml') if env_dir else None
+def _node_params(env_dir, name, file=None):
+    """param/<env>/<file か name>.yaml のパラメータ（ノード名か /** の節の ros__parameters）と、そのパス。無ければ ({}, None)."""
+    path = os.path.join(env_dir, f'{file or name}.yaml') if env_dir else None
     data = _load_yaml(path)
     if data is None:
         return {}, None
@@ -123,6 +135,9 @@ def _launch_setup(context):
         raise RuntimeError(f'env.yaml is missing in {env_dir}')
     env = env or {}
     map_path = LaunchConfiguration('map_path').perform(context)
+    matcher = LaunchConfiguration('matcher').perform(context)
+    if matcher not in MATCHERS:
+        raise RuntimeError(f'unknown matcher "{matcher}". Available: {", ".join(MATCHERS)}')
 
     nodes = env.get('nodes') or {n: n in DEFAULT_NODES for n in NODES}
     unknown = sorted(set(nodes) - set(NODES))
@@ -134,15 +149,24 @@ def _launch_setup(context):
         value = _arg_bool(context, arg)
         if value is not None:
             (enabled.add if value else enabled.discard)(name)
+    # lidarslam のときは NDT の代わりに scan_matcher・graph_based_slam を起動する
+    use_slam = matcher == 'lidarslam'
+    if use_slam:
+        enabled.discard('pcl_localization')
     use_ekf = 'ekf_localizer' in enabled
     sim_time = {'use_sim_time': bool(env.get('use_sim_time', False))}
+    # TF は EKF（起動しないときは pose_to_tf）が出す。NDT・scan_matcher は EKF の TF を初期値にする
+    matcher_values = {'publish_tf': False, 'use_tf_init_guess': use_ekf}
+    listed = [n for n in NODES if n in enabled] + (['scan_matcher', 'graph_based_slam'] if use_slam else [])
+    if not use_ekf and (use_slam or 'pcl_localization' in enabled):
+        listed.append('pose_to_tf')
 
-    actions = [LogInfo(msg=f'[localization_bringup] env: {env_dir or "(none: code defaults)"}, '
-                           f'nodes: {", ".join(n for n in NODES if n in enabled)}')]
+    actions = [LogInfo(msg=f'[localization_bringup] env: {env_dir or "(none: code defaults)"}, matcher: {matcher}, '
+                           f'nodes: {", ".join(listed)}')]
 
-    def parameters(name, launch_values=None):
-        """ノードに渡すパラメータ：param/<env>/<name>.yaml（無ければコードの既定値）に launch が入れる値を重ねた一時 yaml."""
-        params, path = _node_params(env_dir, name)
+    def parameters(name, launch_values=None, file=None):
+        """ノードに渡すパラメータ：param/<env>/<file か name>.yaml（無ければコードの既定値）に launch が入れる値を重ねた一時 yaml."""
+        params, path = _node_params(env_dir, name, file)
         actions.append(LogInfo(msg=f'[localization_bringup] {name}: {path or "code defaults"}'))
         return [_scoped(name, params, launch_values, sim_time)]
 
@@ -167,8 +191,8 @@ def _launch_setup(context):
 
     # ---- NDT ----
     if 'pcl_localization' in enabled:
-        # EKF と起動するときは TF を EKF に任せ、初期値を EKF の TF（点群の時刻）から取る
-        ndt_values = {'publish_tf': not use_ekf, 'use_tf_init_guess': use_ekf}
+        # TF は EKF か pose_to_tf に任せ、EKF と起動するときは初期値を EKF の TF（点群の時刻）から取る
+        ndt_values = dict(matcher_values)
         if map_path:
             ndt_values['map_path'] = map_path
         ndt = LifecycleNode(
@@ -189,20 +213,44 @@ def _launch_setup(context):
                 transition_id=lifecycle_msgs.msg.Transition.TRANSITION_CONFIGURE)),
         ]
 
+    # ---- SLAM（lidarslam_ros2）----
+    if use_slam:
+        actions += [
+            # 逐次の位置合わせと地図作り。解は /current_pose（PoseStamped。MATLAB CR の sensor 4）と /slam_pose（EKF へ）
+            Node(
+                package='scanmatcher', executable='scanmatcher_node', name='scan_matcher', output='screen',
+                parameters=parameters('scan_matcher', matcher_values, file='lidarslam'),
+                remappings=[('input_cloud', '/velodyne_points')]),
+            # ループ閉じ込みと地図の保存（サービス /map_save。コマンド savemap）。map.pcd は launch の作業ディレクトリに書く
+            Node(
+                package='graph_based_slam', executable='graph_based_slam_node', name='graph_based_slam',
+                output='screen', parameters=parameters('graph_based_slam', file='lidarslam')),
+        ]
+
     # ---- EKF ----
     if use_ekf:
+        remappings = [('odom', '/wheelchair/odom')]   # オドメトリ（実機は whill_odometry、Gazebo は gazebo_bridge）
+        if use_slam:
+            remappings.append(('ndt_pose', '/slam_pose'))
         actions.append(Node(
             package='ekf_localizer', executable='ekf_localizer_node',
             name='ekf_localizer', output='screen', parameters=parameters('ekf_localizer'),
-            # オドメトリ（実機は whill_odometry、Gazebo は gazebo_bridge）
-            remappings=[('odom', '/wheelchair/odom')]))
+            remappings=remappings))
+    elif use_slam or 'pcl_localization' in enabled:
+        # EKF を起動しないとき：NDT・scan_matcher の解（map -> LiDAR）を取付で map -> base の TF に直す。フレームは ekf_localizer.yaml と同じ
+        ekf_params, _ = _node_params(env_dir, 'ekf_localizer')
+        frames = {k: ekf_params[k] for k in ('map_frame_id', 'base_frame_id', 'lidar_frame_id') if k in ekf_params}
+        actions.append(Node(
+            package='localization_bringup', executable='pose_to_tf.py', name='pose_to_tf', output='screen',
+            parameters=[{**frames, **sim_time}], remappings=[('pose', POSE_TOPIC[matcher])]))
 
     # ---- RViz（/tf をそのまま読む。点群はその stamp の時刻の TF、視点の Target Frame base_link は最新の値）----
+    # lidarslam のときは lidarslam の mapping.rviz（/map・/modified_map・/path・/current_pose）
     if 'rviz' in enabled:
+        rviz_package, rviz_file = RVIZ[matcher]
         actions.append(Node(
             package='rviz2', executable='rviz2', name='rviz2', output='screen',
-            arguments=['-d', os.path.join(
-                get_package_share_directory('pcl_localization_ros2'), 'rviz', 'localization2.rviz')],
+            arguments=['-d', os.path.join(get_package_share_directory(rviz_package), 'rviz', rviz_file)],
             parameters=[sim_time]))
 
     return actions
@@ -217,10 +265,14 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'use_ekf', default_value='',
             description='Run the EKF (ekf_localizer) (overrides nodes.ekf_localizer in env.yaml; empty: use env.yaml). '
-                        'If the EKF does not run, NDT publishes the TF itself'),
+                        'If the EKF does not run, pose_to_tf publishes the TF from the NDT or lidarslam pose'),
         DeclareLaunchArgument(
             'map_path', default_value='',
             description='PCD map path (overrides map_path in pcl_localization.yaml)'),
+        DeclareLaunchArgument(
+            'matcher', default_value='ndt',
+            description='Scan matcher: ndt (pcl_localization) or lidarslam (scan_matcher and graph_based_slam). '
+                        'lidarslam.launch.py sets lidarslam'),
         DeclareLaunchArgument(
             'rviz', default_value='',
             description='Launch RViz (overrides nodes.rviz in env.yaml; empty: use env.yaml)'),

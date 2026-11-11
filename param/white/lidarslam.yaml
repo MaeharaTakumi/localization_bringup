@@ -1,0 +1,56 @@
+# localization_bringup の環境 white の SLAM（ros2 launch localization_bringup lidarslam.launch.py env:=white、コマンド lidarslam white）
+# このフォルダの <ノード名>.yaml を launch がそのノードに渡す。yaml が無いノード、yaml に書いていない項目は、
+# そのノードのコードの既定値になる（どの項目も書いておく。2026-11-11、dev_log.md の 84）。
+# lidarslam_ros2 の scan_matcher（逐次の位置合わせと地図作り）と graph_based_slam（ループ閉じ込みと地図の保存 /map_save）のパラメータ。
+# 説明は lidarslam_ros2 の README.md。位置合わせ・地図・ループの値は lidarslam_ros2 の lidarslam/param/lidarslam.yaml（パッケージ単体の launch 用）と同じ。
+# ekf_localizer・whill_odometry と env.yaml は NDT のとき（localization.launch.py）と同じファイルを使う。
+# use_sim_time と、scan_matcher の publish_tf・use_tf_init_guess（EKF を起動するときは false・true）は launch が入れる
+# （TF は EKF か、EKF を起動しないときは pose_to_tf が出す）。
+scan_matcher:
+  ros__parameters:
+    global_frame_id: map
+    robot_frame_id: velodyne        # LiDAR のフレーム。出力 /current_pose・/slam_pose が NDT と同じ LiDAR の姿勢になる（点群を変換しない）
+    odom_frame_id: odom             # use_odom のときだけ使う
+    registration_method: NDT        # NDT / GICP
+    ndt_resolution: 2.0
+    ndt_num_threads: 4
+    gicp_corr_dist_threshold: 5.0
+    trans_for_mapupdate: 1.5        # この距離 [m] 進むごとに部分地図を足す
+    vg_size_for_input: 0.5          # 位置合わせに使う点群の間引き [m]
+    vg_size_for_map: 0.1            # 地図に足す点群の間引き [m]
+    use_min_max_filter: true
+    scan_min_range: 1.0             # LiDAR からの水平距離 [m]
+    scan_max_range: 200.0
+    scan_period: 0.05               # use_imu のときの歪み補正に使う
+    map_publish_period: 15.0        # /map を出す周期 [s]（壁時計）
+    num_targeted_cloud: 20          # 位置合わせの相手にする直近の部分地図の数
+    # 初期姿勢（LiDAR の姿勢）。pcl_localization.yaml と同じ値（地図の原点。z は LiDAR の高さ）
+    set_initial_pose: true
+    initial_pose_x: 0.0
+    initial_pose_y: 0.0
+    initial_pose_z: 1.2
+    initial_pose_qx: 0.0
+    initial_pose_qy: 0.0
+    initial_pose_qz: 0.0
+    initial_pose_qw: 1.0
+    publish_tf: false               # TF は EKF（か pose_to_tf）が出す（launch も false を入れる）
+    use_tf_init_guess: true         # 初期値を TF（点群の時刻の map -> velodyne）から取る（launch が EKF を起動するかで入れ直す）
+    tf_init_guess_timeout: 0.05     # 初期値の TF を待つ時間 [s]
+    use_odom: false
+    use_imu: false
+    debug_flag: false
+
+graph_based_slam:
+  ros__parameters:
+    registration_method: NDT
+    ndt_resolution: 1.0
+    ndt_num_threads: 4
+    voxel_leaf_size: 0.1
+    loop_detection_period: 3000     # ループを探す周期 [ms]
+    threshold_loop_closure_score: 0.7
+    distance_loop_closure: 100.0    # この距離 [m] 以上前に通った部分地図をループの候補にする
+    range_of_searching_loop_closure: 20.0   # 今の位置からこの距離 [m] 以内の部分地図を候補にする
+    search_submap_num: 2
+    num_adjacent_pose_cnstraints: 5
+    use_save_map_in_loop: true      # ループを閉じるたびに map.pcd を書く（作業ディレクトリ）
+    debug_flag: true
