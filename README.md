@@ -6,80 +6,68 @@ EKF（[ekf_localizer](https://github.com/MaeharaTakumi/ekf_localizer)）を、�
 
 ```bash
 ros2 launch localization_bringup localization.launch.py env:=gazebo
-ros2 launch localization_bringup localization.launch.py map_path:=/path/to/map.pcd             # 実機（車椅子 red。既定）
-ros2 launch localization_bringup localization.launch.py env:=white map_path:=/path/to/map.pcd   # 実機（車椅子 white）
+ros2 launch localization_bringup localization.launch.py env:=blue map_path:=/path/to/map.pcd    # 実機（車椅子 blue）
+ros2 launch localization_bringup localization.launch.py                                         # env なし：NDT と EKF をコードの既定値で起動するだけ
 ```
 
 | 引数 | 既定値 | 説明 |
 |---|---|---|
-| `env` | `red` | 環境名（`param/env/<env>.yaml`。`gazebo`・`red`・`blue`・`white`）か、環境ファイルのパス |
-| `use_ekf` | （空） | `true` / `false` で ekf_localizer と odom_relay を起動する / しない（環境ファイルの `nodes.*.enable` より優先。空なら環境ファイルの値）。EKF を起動しないときは NDT が TF を配信する |
-| `map_path` | （空） | PCD 地図のパス。環境ファイルの値より優先 |
-| `rviz` | （空） | `true` / `false` で RViz を起動する / しない（環境ファイルの `nodes.rviz.enable` より優先。空なら環境ファイルの値）。RViz は `/tf` をそのまま読み、点群をその stamp の時刻の TF（ekf_localizer の予測値の補間。MATLAB・NDT の初期値と同じ）で表示する（2026-10-19〜26 は `/tf` を `tf_ndt_update` に付け替えていた） |
+| `env` | （空） | 環境の名前（`param/<env>/`。`gazebo`・`red`・`blue`・`white`）か、環境のフォルダのパス。空なら NDT と EKF を、yaml を渡さずにコードの既定値で起動する（取付の TF・地図・sim time が無いので、推定として使うときは env を指定する。コンテナのコマンド `localization` の既定は red） |
+| `use_ekf` | （空） | `true` / `false` で ekf_localizer を起動する / しない（`env.yaml` の `nodes` より優先。空なら `env.yaml` の値）。EKF を起動しないときは NDT が TF を配信する |
+| `map_path` | （空） | PCD 地図のパス。`pcl_localization.yaml` の値より優先 |
+| `rviz` | （空） | `true` / `false` で RViz を起動する / しない（`env.yaml` の `nodes` より優先）。RViz は `/tf` をそのまま読み、点群をその stamp の時刻の TF（ekf_localizer の予測値の補間）で表示する |
 
 ## 構成
 
 ```
-点群 ─▶ pcl_localization (NDT) ─▶ /ndt_pose ─▶ ekf_localizer ◀─ odom_relay ◀─ オドメトリ
-              ▲                                      │      （倍率・時刻）
-              └── TF map→LiDAR（点群の時刻）◀────────┘ TF map→base, /ekf_pose
+点群 /velodyne_points ─▶ pcl_localization (NDT) ─▶ /ndt_pose ─▶ ekf_localizer ◀─ /wheelchair/odom ◀─ whill_odometry（実機）・Gazebo
+                               ▲                                     │
+                               └── TF map→LiDAR（点群の時刻）◀───────┘ TF map→base, /ekf_pose, /ekf_odom
 ```
 
-## 環境を追加する
+トピックは各ノードの名前のままでつながる。launch が付け替えるのは ekf_localizer の `odom` → `/wheelchair/odom` と、
+NDT の `pcl_pose` → `/current_pose`（RViz と、研究室の MATLAB（whill_common_matlab の CR）の実機モードが購読する名前）だけ。
+オドメトリの倍率（`odom_scale`）と時刻の決め方（`odom_stamp_mode`）は ekf_localizer が持つ（2026-11-11 に `odom_relay` ノードから移した）。
 
-`param/env/<名前>.yaml` を 1 つ置いて `colcon build` すると `env:=<名前>` で使えます
-（ビルドせずに試すなら `env:=/path/to/<名前>.yaml`）。項目は [param/env/red.yaml](param/env/red.yaml) のコメントを参照してください。
+## 環境（`param/<env>/`）
 
-| 項目 | 内容 |
+環境は 1 つのフォルダ。追加するにはフォルダを写して `colcon build` する（ビルドせずに試すなら `env:=/path/to/<フォルダ>`）。
+
+| ファイル | 中身 |
 |---|---|
-| `use_sim_time` | Gazebo なら `true` |
-| `nodes.<ノード名>.enable` | ノードを起動するか（`whill_odometry`・`joint_state_odometry`・`pcl_localization`・`odom_relay`・`ekf_localizer`・`rviz`。全部書く。`odom_relay` は 2026-11-11 に `odom_covariance` から名前を変えた。古い名前が残っていると launch がエラーで止まる）。止めたノードの出力は録画や別の PC から来るものとして、つなぎ方は変えない（EKF を起動しないときは NDT が TF を配信する） |
-| `nodes.<ノード名>.topics` | ノードが購読・配信するトピック（ノードの中の名前: 実際の名前）。launch はそのまま remap に渡すので、つなぐときは配信側と購読側を同じ名前にする。書かなかった名前はノードの中の名前のまま。`/tf`・`/tf_static`・`/clock` は変えない。2026-10-22 に `topics`・`launch_odometry`・`joint_state_odometry` から移した（残っていると launch がエラーで止まる） |
-| `base_frame_id` / `lidar_frame_id` | EKF の状態・TF の基準フレームと、点群のフレーム |
-| `stamp_mode` | EKF の計算に使う、点群とオドメトリの時刻の決め方（両方そろえる。点群のトピック自体の stamp は変えない）。`stamp`（既定）：stamp をそのまま使う / `receipt`：この PC で受信した時刻にする / `auto`：\|受信した時刻 − stamp\| が `stamp_auto_threshold`（環境ファイルの最上位。既定 0.1 s）以上なら受信した時刻、小さければ stamp（1 つずつ判断する）。launch が NDT（`/ndt_pose` の stamp と TF の初期値を引く時刻）と `odom_relay`（`/localization/odom` の stamp）の、同じ名前のパラメータ `stamp_mode`・`stamp_auto_threshold` に入れる（2026-11-11 に名前をそろえた。それまでは NDT が `scan_time_source`（`stamp` は `message`）・`scan_time_auto_threshold`、環境ファイルが `clock_offset_threshold`、`odom_covariance` が `auto_threshold`）。2026-11-09 に `cloud_stamp_corrector` をやめた。2026-10-22 に `clock_synced`（`true` / `false` / `auto`）から名前を変えた |
-| `static_tfs` | launch が配信する静的 TF。URDF などが配信するものは書かない |
-| `parameters.<ノード名>` | ノードのパラメータの上書き（地図・初期姿勢など）。`whill_odometry`・`joint_state_odometry` も上書きできる。launch がノード名の節の一時ファイルにして渡すので、各パッケージの yaml のノード名の節より優先される |
+| `env.yaml` | launch が読む（ROS のパラメータファイルではない）：`use_sim_time`、起動するノード `nodes`（`whill_odometry`・`pcl_localization`・`ekf_localizer`・`rviz` を true / false）、launch が配信する静的 TF `static_tfs`（URDF などが配信するものは書かない） |
+| `ekf_localizer.yaml` | ekf_localizer のパラメータ（説明は ekf_localizer の README） |
+| `pcl_localization.yaml` | NDT のパラメータ（説明は lidar_localization の README）。時刻の決め方 `stamp_mode` もここ |
+| `whill_odometry.yaml` | whill_odometry のパラメータ（実機だけ。車椅子の `motor_speed_ts` のトピック `input_topic_name` など） |
+
+- `<ノード名>.yaml` は普通の ROS のパラメータファイル（`<ノード名>: ros__parameters:`）なので、`ros2 run ... --ros-args --params-file` にも使える。
+- **yaml が無いノード、yaml に書いていない項目は、そのノードのコードの既定値になる**。各パッケージはパラメータファイルを持たない
+  （2026-11-11 に `ekf.yaml`・`localization.yaml`・`odometry.yaml` をやめた）。どの環境も、全項目を書いておく。
+- launch が入れる値は `use_sim_time`（`env.yaml` の値。全ノード）、NDT の `publish_tf`・`use_tf_init_guess`（EKF を起動するときは false・true）、
+  `map_path`（launch 引数を付けたとき）だけ。launch は yaml を読んでこれらを重ね、ノード名の節の一時 yaml にして渡す
+  （整数と小数が混ざった数のリストは小数にそろえる。rcl は型の違う要素のリストを読めない）。
+- 起動ログに、各ノードがどの yaml を読んだか（無ければ `code defaults`）が出る。効いた値は `ros2 param dump /<ノード名>` で確かめる。
 
 | 環境 | 内容 |
 |---|---|
-| `red`（既定）・`blue`・`white` | 実機。red と white は車椅子（`nodes.whill_odometry.topics.motor_speed` の `Drp5_whill_<色>`。ラズパイのホスト名）だけが違う。blue は取付（`static_tfs`）とオドメトリの倍率（`odom_scale`）も違う（共通の設定を変えるときは 3 つとも直す）。取付は launch が静的 TF で配信。whill_odometry を起動。点群・オドメトリの stamp はそのまま使う（`stamp_mode: stamp`。自己位置推定の PC とラズパイは時刻同期している） |
-| `gazebo` | シミュレーション。sim time。取付は URDF が配信。基準フレームは `base_footprint`。オドメトリは `/wheelchair/odom`（Gazebo の diff_drive_controller の速度の移動平均を 1 にしたもの）。omega の倍率（`odom_scale`）と Q を設定 |
+| `red`・`white` | 実機。違うのは車椅子（`whill_odometry.yaml` の `input_topic_name`、`Drp5_whill_<色>`）だけ |
+| `blue` | 実機。車椅子のほかに、取付（`env.yaml` の `static_tfs`）とオドメトリの倍率（`ekf_localizer.yaml` の `odom_scale`）も違う |
+| `gazebo` | シミュレーション。sim time、取付は URDF（`static_tfs` は空）、基準フレームは `base_footprint`、オドメトリは Gazebo の `/wheelchair/odom`（移動平均 1）。omega の倍率 0.922、Q の速度 3 つは 0 |
+
+実機に共通の設定を変えるときは red・blue・white の 3 つとも直す。
+
+## 時刻
+
+点群とオドメトリの時刻は、それぞれのノードで決める（`stamp`：メッセージの stamp / `receipt`：受け取った時刻 / `auto`：\|受け取った時刻 − stamp\| が閾値以上なら受け取った時刻）。
+
+- 点群：`pcl_localization.yaml` の `stamp_mode`・`stamp_auto_threshold`。NDT が `/ndt_pose` の stamp と、初期値の TF を引く時刻に使う
+  （点群のトピック自体の stamp は変えない）。EKF は `/ndt_pose` の stamp をそのまま使う（`/ndt_pose` を受け取った時刻は NDT の計算の遅れを含むので使わない）。
+- オドメトリ：`ekf_localizer.yaml` の `odom_stamp_mode`・`odom_stamp_auto_threshold`（EKF が受け取った時刻）。実機の whill_odometry も
+  `use_stamped_input`（true でラズパイの stamp）を持つ。
+- 今はどの環境も `stamp`（自己位置推定の PC とラズパイは時刻同期している。Gazebo は sim time）。時計がずれている環境では両方を `receipt` か `auto` にする。
 
 ## robot_localization（廃止）
 
 robot_localization（2 段 EKF）に切り替えて比べる機能（`estimator:=robot_localization`）は 2026-10-15 に廃止しました。
 Gazebo の比較で ekf_localizer と同じか、その場の回転・曲線では ekf_localizer のほうが良かったためです。
 コードは廃止する前の最後の commit（`robot_localization` ブランチの 23767ee）に残っています。
-
-## オドメトリの倍率と観測ノイズ
-
-オドメトリは `odom_relay`（2026-11-11 に `odom_covariance` から名前を変えた。共分散は扱わない）を通して `/localization/odom` に中継され、
-v・omega に倍率（`odom_scale`）が掛かり、時刻が決まる。
-パラメータは環境ファイルの `parameters.odom_relay`（書かなければ `scripts/odom_relay.py` の既定値）。
-
-観測ノイズ R は `ekf_localizer` が速さと加速度から計算する（2026-11-09 に当時の `odom_covariance` から移した。メッセージの共分散は使わない）。
-パラメータは `ekf_localizer` の `param/ekf.yaml`（全環境で実機 blue の値。環境ごとに変えるなら `parameters.ekf_localizer` に書く。
-`parameters.odom_relay` に R の項目が残っていると launch はエラーで止まる）。
-
-```
-R_v     = R_odom[0] + odom_noise_alpha[0]·v² + odom_noise_alpha[1]·ω² + (accel_noise_tau[0]·dv/dt)²
-R_omega = R_odom[1] + odom_noise_alpha[2]·v² + odom_noise_alpha[3]·ω² + (accel_noise_tau[1]·dω/dt)²
-```
-
-- 時刻（`stamp_mode`・`stamp_auto_threshold`）は launch が環境ファイルの値をそのまま入れる。
-- `odom_noise_alpha`（Nav2 AMCL の `odom_alpha` と同じ考え方）と `accel_noise_tau` がすべて 0 なら、固定の `R_odom`。
-- `odom_scale` [v, omega] をオドメトリの v・omega に掛ける（実効的な車輪間隔・半径が設定と違う分の補正。既定 [1, 1]）。
-  Gazebo は omega 0.922（回転中、オドメトリの omega が真値の 1.08〜1.09 倍。実効的な車輪間隔 0.532〜0.535 m）。
-- 速さ・加速度に応じた R は効かなかった（加速度に応じた R は、速度が変わる間オドメトリを信じなくなり悪化）。
-- オドメトリの遅れの補正は `ekf_localizer` の `odom_delay`（stamp から引いて入れる）で行う。ここにも同じ `odom_delay` があったが、
-  2026-10-15 に外した。Gazebo（`gazebo.yaml`）は `odom_delay: 0`：diff_drive_controller の速度の移動平均を 10（0.2 s）から 1（0.02 s）に
-  した（Gazebo 側の `controller.yaml` の `velocity_rolling_window_size`、2026-10-12）ので、遅れの補正は要らない
-  （0.2 s の移動平均のときは 0.09 s 戻していたが、動き出しが真値より早すぎた）。
-
-### 車輪の角速度からのオドメトリ（`joint_state_odometry`、任意）
-
-環境ファイルの `nodes.joint_state_odometry.enable` を `true` にすると、launch が `scripts/joint_state_odometry.py` を起動し、
-`sensor_msgs/JointState`（`joint_states`）の車輪の角速度から v = r(wR+wL)/2、omega = r(wR-wL)/b を計算して `odom` に出す
-（`gazebo.yaml` では `/localization/wheel_odom`。`nodes.odom_relay.topics.odom` も同じ名前にする）。パラメータ（`left_wheel_joint`・
-`right_wheel_joint`・`wheel_radius`・`wheel_separation`）は `parameters.joint_state_odometry`。
-Gazebo のオドメトリに 0.2 s の移動平均がかかっていたころ（2026-10-12 まで）に、その代わりに試したもの。実運用（`gazebo.yaml`・`red.yaml` などの実機の環境）では使わない。

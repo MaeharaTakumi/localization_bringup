@@ -1,0 +1,15 @@
+# localization_bringup の環境 blue（ros2 launch localization_bringup localization.launch.py env:=blue）
+# このフォルダの <ノード名>.yaml を launch がそのノードに渡す。yaml が無いノード、yaml に書いていない項目は、
+# そのノードのコードの既定値になる（どの項目も書いておく。2026-11-11、dev_log.md の 84）。
+# whill_odometry のパラメータ。use_sim_time は launch が入れる。
+whill_odometry:
+  ros__parameters:
+    # 入力（geometry_msgs/Vector3Stamped、左右輪の並進速度 [km/h]。ラズパイのホスト名 Drp5_whill_blue）
+    input_topic_name: /Drp5_whill_blue/whill_node/motor_speed_ts
+    use_stamped_input: true         # true：入力の header.stamp（ラズパイの時計）、false：受け取った時刻
+    tread_width: 0.495              # [m]（未確認）
+    # motor_speed は x = 右輪、y = 左輪。右輪は前進で負なので反転する（生の値に掛けて前進正にそろえる係数 [左, 右]）
+    wheel_sign: [1.0, -1.0]
+    # 出力 /wheelchair/odom の座標系（twist は child_frame_id = base_link で表す）
+    odom_frame_id: odom
+    base_frame_id: base_link

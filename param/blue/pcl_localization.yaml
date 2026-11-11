@@ -1,0 +1,43 @@
+# localization_bringup の環境 blue（ros2 launch localization_bringup localization.launch.py env:=blue）
+# このフォルダの <ノード名>.yaml を launch がそのノードに渡す。yaml が無いノード、yaml に書いていない項目は、
+# そのノードのコードの既定値になる（どの項目も書いておく。2026-11-11、dev_log.md の 84）。
+# NDT（pcl_localization_ros2）のパラメータ。説明は lidar_localization の README.md。
+# use_sim_time と、publish_tf・use_tf_init_guess（EKF を起動するときは false・true。EKF が TF を出し、NDT はその TF を初期値にする）は launch が入れる。
+pcl_localization:
+  ros__parameters:
+    registration_method: NDT_OMP
+    score_threshold: 0.2
+    ndt_resolution: 1.0
+    ndt_step_size: 0.1
+    ndt_num_threads: 0              # 0 なら使える最大のスレッド数
+    transform_epsilon: 0.01
+    voxel_leaf_size: 0.1
+    map_viz_leaf_size: 0.1          # RViz に出す地図だけ間引く（NDT には間引かない地図を渡す）
+    scan_max_range: 100.0
+    scan_min_range: 0.1
+    scan_period: 0.05
+    use_pcd_map: true
+    map_path: ""                    # 地図。launch 引数 map_path（localization コマンドの地図）で渡す
+    # 初期姿勢（LiDAR の姿勢）。地図の原点（z は LiDAR の高さ）。違う場所から始めるときは RViz の 2D Pose Estimate で与える
+    set_initial_pose: true
+    initial_pose_x: 0.0
+    initial_pose_y: 0.0
+    initial_pose_z: 1.2
+    initial_pose_qx: 0.0
+    initial_pose_qy: 0.0
+    initial_pose_qz: 0.0
+    initial_pose_qw: 1.0
+    use_imu: false
+    enable_debug: false
+    enable_debug_topic: true        # /localization_debug（[点数, align 時間, 収束, fitness, angle_diff]）
+    global_frame_id: map
+    odom_frame_id: odom
+    base_frame_id: base_link        # ekf_localizer.yaml の base_frame_id と同じにする
+    # /ndt_pose の stamp と TF の初期値を引く時刻（stamp / receipt / auto。点群のトピック自体の stamp は変えない）。
+    # stamp：点群の stamp（時刻同期済み）、receipt：この PC で受け取った時刻、auto：|受け取った時刻 − stamp| が stamp_auto_threshold 以上なら受け取った時刻
+    stamp_mode: stamp
+    stamp_auto_threshold: 0.1
+    pose_output_frame: lidar        # /pcl_pose の基準（lidar：NDT の解そのもの、base_link：取付で車両中心に直す）
+    tf_init_guess_timeout: 0.05     # 初期値の TF を待つ時間 [s]
+    use_fitness_reject: false
+    fitness_reject_threshold: 1.0

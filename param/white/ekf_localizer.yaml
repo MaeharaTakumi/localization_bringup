@@ -1,0 +1,45 @@
+# localization_bringup の環境 white（ros2 launch localization_bringup localization.launch.py env:=white）
+# このフォルダの <ノード名>.yaml を launch がそのノードに渡す。yaml が無いノード、yaml に書いていない項目は、
+# そのノードのコードの既定値になる（どの項目も書いておく。2026-11-11、dev_log.md の 84）。
+# ekf_localizer のパラメータ。説明は ekf_localizer の README.md（「パラメータ」）。use_sim_time は launch が env.yaml の値を入れる。
+ekf_localizer:
+  ros__parameters:
+    use_odom: true
+    # TF・ekf_pose・ekf_odom を、最新の状態を現在時刻まで予測して出す周期 [Hz]
+    predict_rate: 50.0
+    # TF を周期の刻みの stamp で、今より後の 2 刻みと今以前の 1 刻みを毎周期送る（送り直した刻みは購読側で置き換わる）。
+    # NDT・MATLAB は点群が届いた時点でその stamp の TF を持っている（dev_log.md の 72）
+    tf_future_steps: 2
+    tf_past_steps: 1
+    history_length: 1.0
+    max_predict_dt: 0.2
+
+    map_frame_id: map
+    base_frame_id: base_link        # EKF の状態・TF（map -> base_frame_id）の基準
+    lidar_frame_id: velodyne        # 点群のフレーム（取付 base -> LiDAR を TF から読む）
+
+    # 並びは [x, y, z, roll, pitch, yaw, v_xy, v_z, omega_roll, omega_pitch, omega_yaw]
+    # omega_roll・omega_pitch は 0.1（実機は傾きが動く。blue の録画で点群の時刻の予測値 − NDT の解の roll・pitch が最も小さい。
+    # 調整に使っていない blue_spin5 で roll −9 %・pitch −5 %）。v_z は 0（大きくすると z が悪くなった。dev_log.md の 76）
+    Q: [0.05, 0.05, 0.005, 0.05, 0.05, 0.05, 0.05, 0.0, 0.1, 0.1, 10.0]
+    P_init: [0.2, 0.2, 0.2, 0.01, 0.01, 0.01, 0.01, 0.0, 0.01, 0.01, 0.01]
+    # R_ndt・P_init・R_odom は実機 blue で求めた値（dev_log.md の 76・80・82。コードの既定と同じ）
+    R_ndt: [0.000208, 0.000155, 9.61e-05, 5.89e-05, 6.32e-05, 1.23e-05]   # [x, y, z, roll, pitch, yaw]（LiDAR）
+
+    # オドメトリの観測ノイズ（分散）：R_v = R_odom[0] + a[0] v² + a[1] ω² + (τ[0] dv/dt)²、R_omega = R_odom[1] + a[2] v² + a[3] ω² + (τ[1] dω/dt)²
+    R_odom: [0.00608, 0.000992]
+    odom_noise_alpha: [0.0, 0.0, 0.0, 0.0]
+    accel_noise_tau: [0.0, 0.0]
+    # v・omega に掛ける倍率（未校正）
+    odom_scale: [1.0, 1.0]
+    # オドメトリの観測の時刻（stamp / receipt / auto）。stamp：メッセージの stamp（自己位置推定の PC とラズパイは時刻同期している）、
+    # receipt：このノードが受け取った時刻、auto：|受け取った時刻 − stamp| が odom_stamp_auto_threshold 以上なら受け取った時刻
+    odom_stamp_mode: stamp
+    odom_stamp_auto_threshold: 0.1
+
+    gate_ndt: 100000.0              # 実質無効
+    ndt_delay: 0.0
+    gate_odom: 100000.0             # 実質無効
+    odom_timeout_init: 0.2
+    # オドメトリの遅れの補正（stamp から引く）。実機の遅れは未測定
+    odom_delay: 0.0

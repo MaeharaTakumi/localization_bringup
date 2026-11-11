@@ -7,8 +7,4 @@ install(DIRECTORY launch param
   DESTINATION share/${PROJECT_NAME}
 )
 
-install(PROGRAMS scripts/odom_relay.py scripts/joint_state_odometry.py
-  DESTINATION lib/${PROJECT_NAME}
-)
-
 ament_package()

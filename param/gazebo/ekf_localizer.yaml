@@ -1,0 +1,47 @@
+# localization_bringup の環境 gazebo（ros2 launch localization_bringup localization.launch.py env:=gazebo）
+# このフォルダの <ノード名>.yaml を launch がそのノードに渡す。yaml が無いノード、yaml に書いていない項目は、
+# そのノードのコードの既定値になる（どの項目も書いておく。2026-11-11、dev_log.md の 84）。
+# ekf_localizer のパラメータ。説明は ekf_localizer の README.md（「パラメータ」）。use_sim_time は launch が env.yaml の値を入れる。
+ekf_localizer:
+  ros__parameters:
+    use_odom: true
+    # TF・ekf_pose・ekf_odom を、最新の状態を現在時刻まで予測して出す周期 [Hz]
+    predict_rate: 50.0
+    # TF を周期の刻みの stamp で、今より後の 2 刻みと今以前の 1 刻みを毎周期送る（送り直した刻みは購読側で置き換わる）。
+    # NDT・MATLAB は点群が届いた時点でその stamp の TF を持っている（dev_log.md の 72）
+    tf_future_steps: 2
+    tf_past_steps: 1
+    history_length: 1.0
+    max_predict_dt: 0.2
+
+    map_frame_id: map
+    base_frame_id: base_footprint        # EKF の状態・TF（map -> base_frame_id）の基準
+    lidar_frame_id: velodyne        # 点群のフレーム（取付 base -> LiDAR を TF から読む）
+
+    # 並びは [x, y, z, roll, pitch, yaw, v_xy, v_z, omega_roll, omega_pitch, omega_yaw]
+    # v_z・omega_roll・omega_pitch は 0（Gazebo は真の roll・pitch がほぼ動かず、0.1 にすると 15 % 悪くなる。0 のまま動かず、8 状態と同じ。
+    # dev_log.md の 74・76）。omega_yaw は 10（速度が急に変わったとき omega_yaw がオドメトリと NDT に早く追従する）
+    Q: [0.05, 0.05, 0.005, 0.05, 0.05, 0.05, 0.05, 0.0, 0.0, 0.0, 10.0]
+    P_init: [0.2, 0.2, 0.2, 0.01, 0.01, 0.01, 0.01, 0.0, 0.01, 0.01, 0.01]
+    # P_init・R_ndt・R_odom はコードの既定（実機 blue の値）。2026-11-09 に既定を blue の値にしたので、R_ndt はそれまでの
+    # [1e-2, 1e-2, 1e-2, 0.03, 0.03, 1e-3] の約 50〜500 分の 1 で、Gazebo の再生は悪くなる（定常の回転中の yaw 誤差 0.20 → 0.90°。dev_log.md の 82）
+    R_ndt: [0.000208, 0.000155, 9.61e-05, 5.89e-05, 6.32e-05, 1.23e-05]   # [x, y, z, roll, pitch, yaw]（LiDAR）
+
+    # オドメトリの観測ノイズ（分散）：R_v = R_odom[0] + a[0] v² + a[1] ω² + (τ[0] dv/dt)²、R_omega = R_odom[1] + a[2] v² + a[3] ω² + (τ[1] dω/dt)²
+    R_odom: [0.00608, 0.000992]
+    odom_noise_alpha: [0.0, 0.0, 0.0, 0.0]
+    accel_noise_tau: [0.0, 0.0]
+    # 回転中、オドメトリの omega は真値の 1.08〜1.09 倍（実効的な車輪間隔が 0.532〜0.535 m で、設定の 0.492 m より広い）。
+    # 真値 / オドメトリ（左 0.9205、右 0.9243）の平均を掛ける。v は真値と一致
+    odom_scale: [1.0, 0.922]
+    # オドメトリの観測の時刻（stamp / receipt / auto）。stamp：メッセージの stamp（sim time）、
+    # receipt：このノードが受け取った時刻、auto：|受け取った時刻 − stamp| が odom_stamp_auto_threshold 以上なら受け取った時刻
+    odom_stamp_mode: stamp
+    odom_stamp_auto_threshold: 0.1
+
+    gate_ndt: 100000.0              # 実質無効
+    ndt_delay: 0.0
+    gate_odom: 100000.0             # 実質無効
+    odom_timeout_init: 0.2
+    # オドメトリに移動平均がかかっていない（Gazebo の controller.yaml の velocity_rolling_window_size: 1）ので、遅れの補正はしない
+    odom_delay: 0.0
