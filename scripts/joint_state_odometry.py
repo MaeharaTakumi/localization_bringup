@@ -5,10 +5,11 @@
 
   v = r (wR + wL) / 2、omega = r (wR - wL) / b（差動二輪。実機の whill_odometry と同じ式）
 
-Gazebo の diff_drive_controller のオドメトリ（/wheelchair/odom）は車輪の回転角の差分を 0.2 s 移動平均しているため、
-速度の変化が 0.2 s かけて斜めに現れる（中央で約 0.1 s 遅れる）。joint_states の角速度は移動平均がかかっていないので、
-こちらを使う。velocity が無い・有限でないときは position の差分で求める。
-共分散は付けない（odom_covariance が付ける）。
+Gazebo の diff_drive_controller のオドメトリ（/wheelchair/odom）が車輪の回転角の差分を 0.2 s 移動平均していたころ
+（速度の変化が 0.2 s かけて斜めに現れ、中央で約 0.1 s 遅れる）に、移動平均のかかっていない joint_states の角速度から
+求めるために作った。2026-10-12 に Gazebo の移動平均を 1 にしたので、今は試す用（環境ファイルの
+nodes.joint_state_odometry.enable は false）。velocity が無い・有限でないときは position の差分で求める。
+共分散は付けない（観測ノイズは ekf_localizer が計算する）。
 """
 
 import math

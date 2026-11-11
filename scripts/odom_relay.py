@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""オドメトリの twist に倍率を掛け、時刻を決めて中継するノード.
+"""オドメトリの twist に倍率を掛け、時刻を決めて中継するノード（2026-11-11 に odom_covariance から名前を変えた。共分散は扱わない）.
 
   odom → odom_out（twist の v・ω に odom_scale を掛け、stamp_mode で header.stamp を決める。他はそのまま）
 
-stamp_mode（localization_bringup の環境ファイルの stamp_mode がそのまま入る。NDT の scan_time_source と同じ決め方）：
+stamp_mode（localization_bringup の環境ファイルの stamp_mode がそのまま入る。NDT の stamp_mode と同じ名前・値・決め方）：
   stamp  ：stamp をそのまま使う
   receipt：このノードが受信した時刻にする
-  auto   ：|受信した時刻 − stamp| が auto_threshold 以上なら受信した時刻、小さければ stamp（1 つずつ判断する）
+  auto   ：|受信した時刻 − stamp| が stamp_auto_threshold 以上なら受信した時刻、小さければ stamp（1 つずつ判断する）
   sim time で /clock をまだ受け取っていない間（このノードの時刻が 0）は、どの stamp_mode でも stamp のまま
 
 odom_scale [v, ω] はオドメトリの倍率の補正（実効的な車輪間隔・車輪半径が設定と違う分）。
@@ -23,16 +23,16 @@ from rclpy.qos import QoSProfile
 from rclpy.qos import ReliabilityPolicy
 
 
-class OdomCovariance(Node):
+class OdomRelay(Node):
 
     def __init__(self):
-        super().__init__('odom_covariance')
+        super().__init__('odom_relay')
         # yaml で [1, 1] のように整数で書いても受け付ける
         any_type = ParameterDescriptor(dynamic_typing=True)
         self.scale = [float(v) for v in self.declare_parameter(
             'odom_scale', [1.0, 1.0], any_type).value]
         self.stamp_mode = self.declare_parameter('stamp_mode', 'stamp').value
-        self.auto_threshold = float(self.declare_parameter('auto_threshold', 0.1, any_type).value)
+        self.stamp_auto_threshold = float(self.declare_parameter('stamp_auto_threshold', 0.1, any_type).value)
         if self.stamp_mode not in ('stamp', 'receipt', 'auto'):
             raise ValueError(f'stamp_mode must be stamp, receipt or auto: {self.stamp_mode}')
         self.count = self.count_receipt = 0
@@ -44,7 +44,7 @@ class OdomCovariance(Node):
         self.create_subscription(Odometry, 'odom', self.on_odom, qos_profile_sensor_data)
         self.get_logger().info(
             f'odom_scale: {self.scale}, '
-            f'stamp_mode: {self.stamp_mode} (auto_threshold {self.auto_threshold} s)')
+            f'stamp_mode: {self.stamp_mode} (stamp_auto_threshold {self.stamp_auto_threshold} s)')
 
     def on_odom(self, msg):
         if self.stamp_mode != 'stamp':
@@ -54,12 +54,12 @@ class OdomCovariance(Node):
         self.pub.publish(msg)
 
     def restamp(self, msg):
-        """stamp_mode が receipt か、auto で受信した時刻と auto_threshold 以上ずれていれば、受信した時刻にする."""
+        """stamp_mode が receipt か、auto で受信した時刻と stamp_auto_threshold 以上ずれていれば、受信した時刻にする."""
         now = self.get_clock().now()
         if now.nanoseconds == 0:
             return   # sim time で /clock をまだ受け取っていない（受信した時刻が分からない）。stamp のまま
         diff = (now.nanoseconds - (msg.header.stamp.sec * 1_000_000_000 + msg.header.stamp.nanosec)) * 1e-9
-        use_receipt = self.stamp_mode == 'receipt' or abs(diff) >= self.auto_threshold
+        use_receipt = self.stamp_mode == 'receipt' or abs(diff) >= self.stamp_auto_threshold
         if use_receipt:
             msg.header.stamp = now.to_msg()
         if self.stamp_mode == 'auto':
@@ -74,7 +74,7 @@ class OdomCovariance(Node):
 
 def main():
     rclpy.init()
-    node = OdomCovariance()
+    node = OdomRelay()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:

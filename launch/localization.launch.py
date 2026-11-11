@@ -42,22 +42,26 @@ import lifecycle_msgs.msg
 import yaml
 
 # 環境ファイルの stamp_mode（EKF の計算に使う、点群とオドメトリの時刻の決め方）。点群のトピック自体の stamp は変えない。
-# NDT の scan_time_source（/ndt_pose の stamp と TF の初期値を引く時刻）と odom_covariance の stamp_mode（/localization/odom の stamp）にする
+# NDT（/ndt_pose の stamp と TF の初期値を引く時刻）と odom_relay（/localization/odom の stamp）の stamp_mode に同じ値を入れる
 #   stamp  ：stamp をそのまま使う（時刻同期済み・Gazebo）
 #   receipt：受信した時刻にする
-#   auto   ：|受信した時刻 − stamp| が clock_offset_threshold（既定 0.1 s）以上なら受信した時刻、小さければ stamp（1 つずつ判断する）
+#   auto   ：|受信した時刻 − stamp| が stamp_auto_threshold（既定 0.1 s）以上なら受信した時刻、小さければ stamp（1 つずつ判断する）
 STAMP_MODES = ('stamp', 'receipt', 'auto')
-SCAN_TIME_SOURCE = {'stamp': 'message', 'receipt': 'receipt', 'auto': 'auto'}
 # 環境ファイルの nodes に書くノード
 NODES = ('whill_odometry', 'joint_state_odometry', 'pcl_localization',
-         'odom_covariance', 'ekf_localizer', 'rviz')
+         'odom_relay', 'ekf_localizer', 'rviz')
+# 名前を変えた環境ファイルの項目（残っているとエラーで止める）
+RENAMED = {
+    # 2026-11-11：共分散を扱わなくなったので odom_covariance を odom_relay に、閾値の名前を NDT・odom_relay とそろえた
+    'clock_offset_threshold': 'stamp_auto_threshold',
+}
+RENAMED_NODES = {'odom_covariance': 'odom_relay'}
 # 2026-10-22 に nodes に移した環境ファイルの項目
 MOVED_TO_NODES = {
     'topics': 'nodes.<node>.topics',
     'launch_odometry': 'nodes.whill_odometry.enable',
     'joint_state_odometry': 'nodes.joint_state_odometry (enable, topics) and parameters.joint_state_odometry',
 }
-
 
 
 def _env_dir():
@@ -134,6 +138,9 @@ def _arg_bool(context, name):
 def _load_nodes(env, path):
     """環境ファイルの nodes から、(起動するノードの集合, ノードごとのトピックの remap の辞書) を返す."""
     nodes = _require(env, path, 'nodes')
+    for old, new in RENAMED_NODES.items():
+        if old in nodes:
+            raise RuntimeError(f'nodes.{old} in {path} was renamed to nodes.{new} on 2026-11-11')
     unknown = sorted(set(nodes) - set(NODES))
     if unknown:
         raise RuntimeError(f'unknown node in nodes of {path}: {", ".join(unknown)}. Available: {", ".join(NODES)}')
@@ -166,16 +173,24 @@ def _launch_setup(context):
     for old, new in MOVED_TO_NODES.items():
         if old in env:
             raise RuntimeError(f'{old} in {path} was moved to {new} on 2026-10-22')
+    for old, new in RENAMED.items():
+        if old in env:
+            raise RuntimeError(f'{old} in {path} was renamed to {new} on 2026-11-11')
     stamp_mode = env.get('stamp_mode', 'stamp')
     if stamp_mode not in STAMP_MODES:
         raise RuntimeError(
             f'stamp_mode "{stamp_mode}" is not supported in {path}. Available: {", ".join(STAMP_MODES)}')
-    clock_threshold = {'auto_threshold': float(env.get('clock_offset_threshold', 0.1))}
+    # stamp_mode と閾値は、NDT と odom_relay に同じ名前のパラメータで渡す
+    stamp_params = {'stamp_mode': stamp_mode,
+                    'stamp_auto_threshold': float(env.get('stamp_auto_threshold', 0.1))}
     overrides = env.get('parameters') or {}
+    for old, new in RENAMED_NODES.items():
+        if old in overrides:
+            raise RuntimeError(f'parameters.{old} in {path} was renamed to parameters.{new} on 2026-11-11')
     for old in ('R_odom', 'odom_noise_alpha', 'accel_noise_tau', 'R_odom_other'):
-        if old in (overrides.get('odom_covariance') or {}):
+        if old in (overrides.get('odom_relay') or {}):
             raise RuntimeError(
-                f'parameters.odom_covariance.{old} in {path} was moved to ekf_localizer on 2026-11-09 '
+                f'parameters.odom_relay.{old} in {path} was moved to ekf_localizer on 2026-11-09 '
                 '(R_odom, odom_noise_alpha, accel_noise_tau; R_odom_other was removed)')
     sim_time = {'use_sim_time': use_sim_time}
 
@@ -183,8 +198,8 @@ def _launch_setup(context):
         return overrides.get(name) or {}
 
     enabled, topics = _load_nodes(env, path)
-    # launch 引数は環境ファイルより優先（use_ekf は odom_covariance も一緒に）
-    for name, value in (('ekf_localizer', use_ekf), ('odom_covariance', use_ekf), ('rviz', use_rviz)):
+    # launch 引数は環境ファイルより優先（use_ekf は odom_relay も一緒に）
+    for name, value in (('ekf_localizer', use_ekf), ('odom_relay', use_ekf), ('rviz', use_rviz)):
         if value is not None:
             (enabled.add if value else enabled.discard)(name)
     use_ekf = 'ekf_localizer' in enabled
@@ -236,8 +251,7 @@ def _launch_setup(context):
         ndt_params = {
             'base_frame_id': base_frame_id,
             # /ndt_pose の stamp と TF の初期値を引く時刻（点群のトピック自体の stamp は変えない）
-            'scan_time_source': SCAN_TIME_SOURCE[stamp_mode],
-            'scan_time_auto_threshold': clock_threshold['auto_threshold'],
+            **stamp_params,
             # EKF と起動するときは TF を EKF に任せ、初期値を EKF の TF から取る
             'publish_tf': not use_ekf,
             'use_tf_init_guess': use_ekf,
@@ -266,15 +280,14 @@ def _launch_setup(context):
         ]
 
     # ---- オドメトリの倍率・時刻（stamp_mode。観測ノイズ R は ekf_localizer が計算する）----
-    if 'odom_covariance' in enabled:
+    if 'odom_relay' in enabled:
         actions.append(Node(
-            package='localization_bringup', executable='odom_covariance.py',
-            name='odom_covariance', output='screen',
-            # パラメータは環境ファイルの parameters.odom_covariance（書かなければ odom_covariance.py の既定値）
+            package='localization_bringup', executable='odom_relay.py',
+            name='odom_relay', output='screen',
+            # パラメータは環境ファイルの parameters.odom_relay（書かなければ odom_relay.py の既定値）
             parameters=[
-                _scoped('odom_covariance', node_params('odom_covariance'),
-                        {'stamp_mode': stamp_mode}, clock_threshold, sim_time)],
-            remappings=remappings('odom_covariance')))
+                _scoped('odom_relay', node_params('odom_relay'), stamp_params, sim_time)],
+            remappings=remappings('odom_relay')))
 
     # ---- EKF ----
     if use_ekf:
@@ -296,14 +309,13 @@ def _launch_setup(context):
         # RViz は /tf をそのまま読む（MATLAB と同じ）：点群はその stamp の時刻の map -> base（ekf_localizer の
         # 50 Hz の予測値を補間）で、視点（Target Frame base_link）は最新の値で表示する。2026-10-19〜26 は /tf を
         # ekf_localizer の tf_ndt_update（NDT で更新した直後の値）に付け替えていた（dev_log.md の 53・69）
-        rviz_remappings = remappings('rviz')
         actions.append(Node(
             package='rviz2', executable='rviz2', name='rviz2', output='screen',
             arguments=['-d', os.path.join(
                 get_package_share_directory('pcl_localization_ros2'), 'rviz',
                 'localization2.rviz')],
             parameters=[sim_time],
-            remappings=rviz_remappings))
+            remappings=remappings('rviz')))
 
     return actions
 
@@ -315,7 +327,7 @@ def generate_launch_description():
             description='Environment name (param/env/<env>.yaml: gazebo, red, blue, white) or path to an env yaml file'),
         DeclareLaunchArgument(
             'use_ekf', default_value='',
-            description='Run the EKF (ekf_localizer) and odom_covariance (overrides nodes.*.enable in the env; '
+            description='Run the EKF (ekf_localizer) and odom_relay (overrides nodes.*.enable in the env; '
                         'empty: use the env). If the EKF does not run, NDT publishes the TF itself'),
         DeclareLaunchArgument(
             'map_path', default_value='',
