@@ -69,7 +69,8 @@ map → LiDAR）を初期値にする（`use_tf_init_guess`）。EKF を起動�
 
 - `<ノード名>.yaml` は普通の ROS のパラメータファイル（`<ノード名>: ros__parameters:`）なので、`ros2 run ... --ros-args --params-file` にも使える。
 - **yaml が無いノード、yaml に書いていない項目は、そのノードのコードの既定値になる**。各パッケージはパラメータファイルを持たない
-  （2026-11-11 に `ekf.yaml`・`localization.yaml`・`odometry.yaml` をやめた）。どの環境も、全項目を書いておく。
+  （2026-11-11 に `ekf.yaml`・`localization.yaml`・`odometry.yaml` をやめた）。どの環境も、全項目を書いておく
+  （launch が入れる下の値は書かなくてよい。書いても launch の値で上書きする。`pcl_localization.yaml` は書いておらず、`lidarslam.yaml` は書いてある）。
 - launch が入れる値は `use_sim_time`（`env.yaml` の値。全ノード）、NDT・scan_matcher の `publish_tf`（いつも false）・`use_tf_init_guess`（EKF を起動するときは true）、
   `map_path`（launch 引数を付けたとき）だけ。launch は yaml を読んでこれらを重ね、ノード名の節の一時 yaml にして渡す
   （整数と小数が混ざった数のリストは小数にそろえる。rcl は型の違う要素のリストを読めない）。

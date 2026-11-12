@@ -213,4 +213,4 @@ sequenceDiagram
 `/ndt_pose`（lidarslam なら `/slam_pose`）から配信します（2026-11-12 から。それまでは NDT が自分で配信していた）。
 
 Gazebo で launch からも同じ子フレーム（`velodyne` など）を配信すると親が 2 つになり、取付として使われる値が到着順で変わります
-（ノードごとに違う値を読むこともあります）。そのため `gazebo.yaml` の `static_tfs` は空にしています。
+（ノードごとに違う値を読むこともあります）。そのため `param/gazebo/env.yaml` の `static_tfs` は空にしています。
