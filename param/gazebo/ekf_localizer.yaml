@@ -6,7 +6,7 @@ ekf_localizer:
   ros__parameters:
     use_odom: true
     # TF・ekf_pose・ekf_odom を、最新の状態を現在時刻まで予測して出す周期 [Hz]
-    predict_rate: 50.0
+    publish_rate: 50.0
     # TF を周期の刻みの stamp で、今より後の 2 刻みと今以前の 1 刻みを毎周期送る（送り直した刻みは購読側で置き換わる）。
     # NDT・MATLAB は点群が届いた時点でその stamp の TF を持っている（dev_log.md の 72）
     tf_future_steps: 2
@@ -30,7 +30,7 @@ ekf_localizer:
     # オドメトリの観測ノイズ（分散）：R_v = R_odom[0] + a[0] v² + a[1] ω² + (τ[0] dv/dt)²、R_omega = R_odom[1] + a[2] v² + a[3] ω² + (τ[1] dω/dt)²
     R_odom: [0.00608, 0.000992]
     odom_noise_alpha: [0.0, 0.0, 0.0, 0.0]
-    accel_noise_tau: [0.0, 0.0]
+    odom_noise_tau: [0.0, 0.0]
     # 回転中、オドメトリの omega は真値の 1.08〜1.09 倍（実効的な車輪間隔が 0.532〜0.535 m で、設定の 0.492 m より広い）。
     # 真値 / オドメトリ（左 0.9205、右 0.9243）の平均を掛ける。v は真値と一致
     odom_scale: [1.0, 0.922]
@@ -39,9 +39,9 @@ ekf_localizer:
     odom_stamp_mode: stamp
     odom_stamp_auto_threshold: 0.1
 
-    gate_ndt: 100000.0              # 実質無効
+    ndt_gate: 100000.0              # 実質無効
     ndt_delay: 0.0
-    gate_odom: 100000.0             # 実質無効
+    odom_gate: 100000.0             # 実質無効
     odom_timeout_init: 0.2
     # オドメトリに移動平均がかかっていない（Gazebo の controller.yaml の velocity_rolling_window_size: 1）ので、遅れの補正はしない
     odom_delay: 0.0

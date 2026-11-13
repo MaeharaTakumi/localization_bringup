@@ -6,7 +6,7 @@ ekf_localizer:
   ros__parameters:
     use_odom: true
     # TF・ekf_pose・ekf_odom を、最新の状態を現在時刻まで予測して出す周期 [Hz]
-    predict_rate: 50.0
+    publish_rate: 50.0
     # TF を周期の刻みの stamp で、今より後の 2 刻みと今以前の 1 刻みを毎周期送る（送り直した刻みは購読側で置き換わる）。
     # NDT・MATLAB は点群が届いた時点でその stamp の TF を持っている（dev_log.md の 72）
     tf_future_steps: 2
@@ -29,7 +29,7 @@ ekf_localizer:
     # オドメトリの観測ノイズ（分散）：R_v = R_odom[0] + a[0] v² + a[1] ω² + (τ[0] dv/dt)²、R_omega = R_odom[1] + a[2] v² + a[3] ω² + (τ[1] dω/dt)²
     R_odom: [0.00608, 0.000992]
     odom_noise_alpha: [0.0, 0.0, 0.0, 0.0]
-    accel_noise_tau: [0.0, 0.0]
+    odom_noise_tau: [0.0, 0.0]
     # v・omega に掛ける倍率（未校正）
     odom_scale: [1.0, 1.0]
     # オドメトリの観測の時刻（stamp / receipt / auto）。stamp：メッセージの stamp（自己位置推定の PC とラズパイは時刻同期している）、
@@ -37,9 +37,9 @@ ekf_localizer:
     odom_stamp_mode: stamp
     odom_stamp_auto_threshold: 0.1
 
-    gate_ndt: 100000.0              # 実質無効
+    ndt_gate: 100000.0              # 実質無効
     ndt_delay: 0.0
-    gate_odom: 100000.0             # 実質無効
+    odom_gate: 100000.0             # 実質無効
     odom_timeout_init: 0.2
     # オドメトリの遅れの補正（stamp から引く）。実機の遅れは未測定
     odom_delay: 0.0

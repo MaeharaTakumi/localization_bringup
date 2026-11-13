@@ -167,7 +167,7 @@ sequenceDiagram
   participant E as ekf_localizer（EKF）
   participant U as /ekf_pose の利用者
 
-  loop predict_rate（50 Hz）
+  loop publish_rate（50 Hz）
     E->>U: /ekf_pose（最新の状態を現在時刻まで予測）
     E-->>N: TF map→base
   end
@@ -205,7 +205,7 @@ sequenceDiagram
 
 | 変換 | 配信 | 使うノード |
 |---|---|---|
-| map → base（Gazebo：`base_footprint`、実機：`base_link`） | EKF（`/tf`。`predict_rate` 50 Hz の周期で、現在時刻まで予測した値。ekf_localizer の `tf_future_steps` が 1 以上なら（環境ファイルは 4 つとも 2、`tf_past_steps` 1）、stamp を周期の刻みにそろえて今より先の刻みも送り、同じ刻みは送り直して置き換える） | NDT（点群の取得時刻の値を補間して初期値に使う）、MATLAB・RViz（最新の値を後輪間中心（RViz は視点の Target Frame `base_link`）に、点群の取得時刻の値を点群の座標変換に使う） |
+| map → base（Gazebo：`base_footprint`、実機：`base_link`） | EKF（`/tf`。`publish_rate` 50 Hz の周期で、現在時刻まで予測した値。ekf_localizer の `tf_future_steps` が 1 以上なら（環境ファイルは 4 つとも 2、`tf_past_steps` 1）、stamp を周期の刻みにそろえて今より先の刻みも送り、同じ刻みは送り直して置き換える） | NDT（点群の取得時刻の値を補間して初期値に使う）、MATLAB・RViz（最新の値を後輪間中心（RViz は視点の Target Frame `base_link`）に、点群の取得時刻の値を点群の座標変換に使う） |
 | `base_footprint` → `base_link` → `velodyne_base_link` → `velodyne` | `robot_state_publisher`（URDF、Gazebo） | NDT・EKF（base → LiDAR の取付として読む）、MATLAB・RViz |
 | `base_link` → `velodyne`、`base_link` → `imu_link` | launch の `static_transform_publisher`（実機） | NDT・EKF（同上）、MATLAB・RViz |
 
